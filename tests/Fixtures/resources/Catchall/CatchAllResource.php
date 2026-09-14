@@ -20,7 +20,7 @@ class CatchAllResource extends AbstractResource
 
     public function handleSub(Request $request, array $remaining): Response
     {
-        // CatchAll 直接处理所有剩余路径
+        // CatchAll handles all remaining paths directly
         return $this->GET($request);
     }
 }

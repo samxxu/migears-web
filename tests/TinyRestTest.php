@@ -19,7 +19,7 @@ class TinyRestTest extends TestCase
         $this->namespace = 'TinyGears\\Web\\Tests\\Fixtures\\Resources';
     }
 
-    // --- 基础路由测试 ---
+    // --- Basic routing tests ---
 
     public function testGetRoot(): void
     {
@@ -97,7 +97,7 @@ class TinyRestTest extends TestCase
         $this->assertCount(2, $data['posts']);
     }
 
-    // --- 错误处理测试 ---
+    // --- Error handling tests ---
 
     public function testNotFound(): void
     {
@@ -120,7 +120,7 @@ class TinyRestTest extends TestCase
     public function testMethodNotAllowed(): void
     {
         $rest = new TinyRest($this->baseDir, $this->namespace);
-        // users/Index 没有实现 patch
+        // users/Index does not implement patch
         $response = $rest->handle(new Request('PATCH', '/users'));
         $this->assertSame(405, $response->status);
     }
@@ -146,7 +146,7 @@ class TinyRestTest extends TestCase
         $this->assertSame('custom error', $data['msg']);
     }
 
-    // --- 全局钩子测试 ---
+    // --- Global hook tests ---
 
     public function testBeforeHookShortCircuit(): void
     {
@@ -195,7 +195,7 @@ class TinyRestTest extends TestCase
         $this->assertSame([1, 2], $order);
     }
 
-    // --- 日志测试 ---
+    // --- Logging tests ---
 
     public function testErrorLogging(): void
     {
@@ -209,7 +209,7 @@ class TinyRestTest extends TestCase
         $this->assertSame('log test', $log['message']);
     }
 
-    // --- CatchAll 测试 ---
+    // --- CatchAll tests ---
 
     public function testCatchAllResource(): void
     {
@@ -220,12 +220,12 @@ class TinyRestTest extends TestCase
         $this->assertTrue($data['caught']);
     }
 
-    // --- 无命名空间测试 ---
+    // --- No namespace tests ---
 
     public function testWithoutNamespace(): void
     {
-        // 没有命名空间时，如果类存在应该也能工作（这里只是测试不崩溃）
-        // 因为我们的 Fixtures 都在命名空间下，这个测试验证不传 namespace 也不会 fatal error
+        // Without namespace, it should still work if the class exists (just testing no crash)
+        // Since our Fixtures are all under namespace, this test verifies passing no namespace doesn't cause a fatal error
         $rest = new TinyRest($this->baseDir);
         $response = $rest->handle(new Request('GET', '/nonexistent'));
         $this->assertSame(404, $response->status);

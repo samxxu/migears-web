@@ -4,8 +4,8 @@ declare(strict_types=1);
 namespace TinyGears\Web;
 
 /**
- * 轻量 HTTP 响应对象。
- * 资源方法返回 Response，由框架统一发送，避免直接输出。
+ * Lightweight HTTP response object.
+ * Resource methods return a Response, which is sent uniformly by the framework to avoid direct output.
  */
 final class Response
 {
@@ -15,7 +15,9 @@ final class Response
         public readonly array $headers = [],
     ) {}
 
-    /** 返回 JSON 响应 */
+    /**
+     * Return a JSON response.
+     */
     public static function json(mixed $data, int $status = 200): self
     {
         return new self(
@@ -25,7 +27,9 @@ final class Response
         );
     }
 
-    /** 返回 HTML 响应 */
+    /**
+     * Return an HTML response.
+     */
     public static function html(string $html, int $status = 200): self
     {
         return new self(
@@ -35,19 +39,25 @@ final class Response
         );
     }
 
-    /** 返回重定向响应 */
+    /**
+     * Return a redirect response.
+     */
     public static function redirect(string $url, int $status = 302): self
     {
         return new self(status: $status, headers: ['Location' => $url]);
     }
 
-    /** 返回空响应 */
+    /**
+     * Return an empty response.
+     */
     public static function empty(int $status = 204): self
     {
         return new self(status: $status);
     }
 
-    /** 发送响应到浏览器 */
+    /**
+     * Send the response to the browser.
+     */
     public function send(): void
     {
         http_response_code($this->status);

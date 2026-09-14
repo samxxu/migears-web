@@ -4,8 +4,8 @@ declare(strict_types=1);
 namespace TinyGears\Web;
 
 /**
- * 轻量 HTTP 请求对象。
- * 封装请求数据，避免直接使用超全局变量，方便单元测试。
+ * Lightweight HTTP request object.
+ * Encapsulates request data to avoid direct use of superglobals and facilitates unit testing.
  */
 final class Request
 {
@@ -18,7 +18,9 @@ final class Request
         public readonly array $server = [],
     ) {}
 
-    /** 从 PHP 全局变量创建 Request 对象 */
+    /**
+     * Create a Request object from PHP global variables.
+     */
     public static function fromGlobals(): self
     {
         $headers = [];
@@ -45,7 +47,9 @@ final class Request
         );
     }
 
-    /** 获取请求头（不区分大小写） */
+    /**
+     * Get a request header (case-insensitive).
+     */
     public function header(string $name, mixed $default = null): mixed
     {
         return $this->headers[strtolower($name)] ?? $default;

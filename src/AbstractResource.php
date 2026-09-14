@@ -4,25 +4,34 @@ declare(strict_types=1);
 namespace TinyGears\Web;
 
 /**
- * REST 资源基类。
- * 
- * 资源类继承本类，实现对应的 HTTP 方法（GET/POST/PUT/DELETE 等，大写）。
- * 方法接收 Request，返回 Response。
+ * REST resource base class.
+ *
+ * Resource classes extend this class and implement the corresponding HTTP methods
+ * (GET/POST/PUT/DELETE, etc., uppercase).
+ * Methods accept a Request and return a Response.
  */
 abstract class AbstractResource
 {
-    /** 资源路径中的命名参数（从 URL 通配符解析而来） */
+    /**
+     * Named parameters from the resource path (parsed from URL wildcards).
+     *
+     * @var array<string, string>
+     */
     protected array $params = [];
 
-    /** 设置命名参数（由 TinyRest 调用） */
+    /**
+     * Set named parameters (called by TinyRest).
+     *
+     * @param array<string, string> $params
+     */
     public function setParams(array $params): void
     {
         $this->params = $params;
     }
 
     /**
-     * 处理请求：before → HTTP方法 → after
-     * 这是模板方法，子类一般不需要覆盖。
+     * Handle the request: before → HTTP method → after.
+     * This is a template method; subclasses generally do not need to override it.
      */
     public function handle(Request $request, string $method): Response
     {
@@ -42,9 +51,10 @@ abstract class AbstractResource
     }
 
     /**
-     * 前置钩子。
-     * 返回 Response 则短路（直接作为响应返回，不再调用方法）。
-     * 返回 null 则继续执行。
+     * Before hook.
+     * Returning a Response short-circuits execution (it is returned directly as the response,
+     * and the method is not called).
+     * Returning null continues execution.
      */
     protected function before(Request $request): ?Response
     {
@@ -52,8 +62,8 @@ abstract class AbstractResource
     }
 
     /**
-     * 后置钩子。
-     * 可以修改或替换响应对象。
+     * After hook.
+     * May modify or replace the response object.
      */
     protected function after(Request $request, Response $response): Response
     {
@@ -61,48 +71,61 @@ abstract class AbstractResource
     }
 
     /**
-     * 子资源分发。
-     * 当 URL 路径还有剩余段时调用，子类可以覆盖此方法来分发子资源。
-     * 默认返回 404。
-     * 
-     * @param list<string> $remaining 剩余路径段
+     * Sub-resource dispatcher.
+     * Called when there are remaining segments in the URL path.
+     * Subclasses may override this method to dispatch sub-resources.
+     * Default returns 404.
+     *
+     * @param list<string> $remaining remaining path segments
      */
     public function handleSub(Request $request, array $remaining): Response
     {
         throw new ResourceNotFoundException();
     }
 
-    /** 默认 GET 方法：405 Method Not Allowed */
+    /**
+     * Default GET method: 405 Method Not Allowed.
+     */
     public function GET(Request $request): Response
     {
         return Response::json(['error' => 'Method Not Allowed'], 405);
     }
 
-    /** 默认 POST 方法：405 */
+    /**
+     * Default POST method: 405.
+     */
     public function POST(Request $request): Response
     {
         return Response::json(['error' => 'Method Not Allowed'], 405);
     }
 
-    /** 默认 PUT 方法：405 */
+    /**
+     * Default PUT method: 405.
+     */
     public function PUT(Request $request): Response
     {
         return Response::json(['error' => 'Method Not Allowed'], 405);
     }
 
-    /** 默认 DELETE 方法：405 */
+    /**
+     * Default DELETE method: 405.
+     */
     public function DELETE(Request $request): Response
     {
         return Response::json(['error' => 'Method Not Allowed'], 405);
     }
 
-    /** 默认 PATCH 方法：405 */
+    /**
+     * Default PATCH method: 405.
+     */
     public function PATCH(Request $request): Response
     {
         return Response::json(['error' => 'Method Not Allowed'], 405);
     }
 
-    /** OPTIONS 方法：默认返回 Allow 头 */
+    /**
+     * OPTIONS method: returns Allow header by default.
+     */
     public function OPTIONS(Request $request): Response
     {
         $methods = $this->getAllowedMethods();
@@ -112,7 +135,9 @@ abstract class AbstractResource
         );
     }
 
-    /** HEAD 方法：默认和 GET 一样但没有 body */
+    /**
+     * HEAD method: same as GET by default but without a body.
+     */
     public function HEAD(Request $request): Response
     {
         $response = $this->GET($request);
@@ -123,7 +148,11 @@ abstract class AbstractResource
         );
     }
 
-    /** 获取资源支持的 HTTP 方法（用于 Allow 头） */
+    /**
+     * Get the HTTP methods supported by this resource (used for the Allow header).
+     *
+     * @return list<string>
+     */
     protected function getAllowedMethods(): array
     {
         $methods = ['OPTIONS', 'HEAD'];

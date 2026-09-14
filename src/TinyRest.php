@@ -7,11 +7,12 @@ use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 
 /**
- * TinyRest — 极简 REST 框架。
- * 
- * 核心特色：目录即路由。不需要定义路由表，文件系统就是路由表。
- * 
- * 用法：
+ * TinyRest — a minimalist REST framework.
+ *
+ * Core feature: directory-as-route. No need to define a route table;
+ * the filesystem is the route table.
+ *
+ * Usage:
  *   $rest = new TinyRest(__DIR__ . '/resources', 'App\\Resources');
  *   $response = $rest->handle(Request::fromGlobals());
  *   $response->send();
@@ -42,46 +43,56 @@ final class TinyRest
         $this->logger = $logger ?? new NullLogger();
     }
 
-    /** 添加全局前置钩子，返回 Response 则短路 */
+    /**
+     * Add a global before hook. Returning a Response short-circuits execution.
+     */
     public function before(callable $handler): self
     {
         $this->beforeHandlers[] = $handler;
         return $this;
     }
 
-    /** 添加全局后置钩子，可以修改响应 */
+    /**
+     * Add a global after hook. May modify the response.
+     */
     public function after(callable $handler): self
     {
         $this->afterHandlers[] = $handler;
         return $this;
     }
 
-    /** 自定义 404 处理 */
+    /**
+     * Custom 404 handler.
+     */
     public function notFound(callable $handler): self
     {
         $this->notFoundHandler = $handler;
         return $this;
     }
 
-    /** 自定义异常处理 */
+    /**
+     * Custom exception handler.
+     */
     public function error(callable $handler): self
     {
         $this->errorHandler = $handler;
         return $this;
     }
 
-    /** 处理请求，返回响应 */
+    /**
+     * Handle a request and return a response.
+     */
     public function handle(Request $request): Response
     {
         try {
-            // 全局前置钩子
+            // Global before hooks
             foreach ($this->beforeHandlers as $handler) {
                 if (null !== $response = $handler($request)) {
                     return $this->runAfter($request, $response);
                 }
             }
 
-            // 定位资源
+            // Locate resource
             $result = $this->locator->locate($request->path);
             if ($result === null) {
                 return $this->runAfter($request, $this->handleNotFound());
@@ -89,23 +100,23 @@ final class TinyRest
 
             [$shortClassName, $filePath, $params, $remaining, $namespaceSegments] = $result;
 
-            // 拼接完整类名并加载文件
+            // Build fully qualified class name and load the file
             $className = $this->buildClassName($shortClassName, $namespaceSegments);
             if (!class_exists($className, false)) {
                 require_once $filePath;
             }
 
-            // 实例化资源
+            // Instantiate resource
             $resource = $this->createResource($className);
             $resource->setParams($params);
 
-            // 有剩余路径 → 子资源分发
+            // Remaining path → dispatch to sub-resource
             if (!empty($remaining)) {
                 $response = $resource->handleSub($request, $remaining);
                 return $this->runAfter($request, $response);
             }
 
-            // 调用资源的 handle 方法（模板方法：before → method → after）
+            // Call the resource's handle method (template method: before → method → after)
             $response = $resource->handle($request, $request->method);
 
             return $this->runAfter($request, $response);
@@ -118,7 +129,9 @@ final class TinyRest
         }
     }
 
-    /** 运行全局后置钩子 */
+    /**
+     * Run global after hooks.
+     */
     private function runAfter(Request $request, Response $response): Response
     {
         foreach ($this->afterHandlers as $handler) {
@@ -127,7 +140,9 @@ final class TinyRest
         return $response;
     }
 
-    /** 处理 404 */
+    /**
+     * Handle 404.
+     */
     private function handleNotFound(): Response
     {
         if ($this->notFoundHandler !== null) {
@@ -136,7 +151,9 @@ final class TinyRest
         return Response::json(['error' => 'Not Found'], 404);
     }
 
-    /** 处理异常 */
+    /**
+     * Handle exceptions.
+     */
     private function handleError(\Throwable $e): Response
     {
         if ($this->errorHandler !== null) {
@@ -145,7 +162,11 @@ final class TinyRest
         return Response::json(['error' => 'Internal Server Error'], 500);
     }
 
-    /** 拼接完整类名 */
+    /**
+     * Build the fully qualified class name.
+     *
+     * @param list<string> $namespaceSegments
+     */
     private function buildClassName(string $shortName, array $namespaceSegments): string
     {
         $parts = [];
@@ -159,7 +180,9 @@ final class TinyRest
         return implode('\\', $parts);
     }
 
-    /** 创建资源实例 */
+    /**
+     * Create a resource instance.
+     */
     private function createResource(string $className): AbstractResource
     {
         if (!class_exists($className)) {
