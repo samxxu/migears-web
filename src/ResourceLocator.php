@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 
-namespace TinyGears\Web;
+namespace MiGears\Web;
 
 /**
  * Directory-based route locator.

@@ -1,12 +1,12 @@
 <?php
 declare(strict_types=1);
 
-namespace TinyGears\Web\Tests;
+namespace MiGears\Web\Tests;
 
 use PHPUnit\Framework\TestCase;
-use TinyGears\Web\AbstractResource;
-use TinyGears\Web\Request;
-use TinyGears\Web\Response;
+use MiGears\Web\AbstractResource;
+use MiGears\Web\Request;
+use MiGears\Web\Response;
 
 class AbstractResourceTest extends TestCase
 {
@@ -137,7 +137,7 @@ class AbstractResourceTest extends TestCase
     public function testHandleSubThrows404(): void
     {
         $resource = $this->makeResource();
-        $this->expectException(\TinyGears\Web\ResourceNotFoundException::class);
+        $this->expectException(\MiGears\Web\ResourceNotFoundException::class);
         $resource->handleSub(new Request('GET', '/'), ['extra', 'path']);
     }
 

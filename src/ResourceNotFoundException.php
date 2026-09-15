@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace TinyGears\Web;
+namespace MiGears\Web;
 
 /** 404 Resource Not Found exception. */
 final class ResourceNotFoundException extends \RuntimeException

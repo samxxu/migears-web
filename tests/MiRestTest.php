@@ -1,14 +1,14 @@
 <?php
 declare(strict_types=1);
 
-namespace TinyGears\Web\Tests;
+namespace MiGears\Web\Tests;
 
 use PHPUnit\Framework\TestCase;
-use TinyGears\Web\TinyRest;
-use TinyGears\Web\Request;
-use TinyGears\Web\Response;
+use MiGears\Web\MiRest;
+use MiGears\Web\Request;
+use MiGears\Web\Response;
 
-class TinyRestTest extends TestCase
+class MiRestTest extends TestCase
 {
     private string $baseDir;
     private string $namespace;
@@ -16,14 +16,14 @@ class TinyRestTest extends TestCase
     protected function setUp(): void
     {
         $this->baseDir = __DIR__ . '/Fixtures/resources';
-        $this->namespace = 'TinyGears\\Web\\Tests\\Fixtures\\Resources';
+        $this->namespace = 'MiGears\\Web\\Tests\\Fixtures\\Resources';
     }
 
     // --- Basic routing tests ---
 
     public function testGetRoot(): void
     {
-        $rest = new TinyRest($this->baseDir, $this->namespace);
+        $rest = new MiRest($this->baseDir, $this->namespace);
         $response = $rest->handle(new Request('GET', '/'));
         $this->assertSame(200, $response->status);
         $data = json_decode($response->body, true);
@@ -32,7 +32,7 @@ class TinyRestTest extends TestCase
 
     public function testPostRoot(): void
     {
-        $rest = new TinyRest($this->baseDir, $this->namespace);
+        $rest = new MiRest($this->baseDir, $this->namespace);
         $response = $rest->handle(new Request('POST', '/', body: ['key' => 'value']));
         $this->assertSame(201, $response->status);
         $data = json_decode($response->body, true);
@@ -41,7 +41,7 @@ class TinyRestTest extends TestCase
 
     public function testGetUsersList(): void
     {
-        $rest = new TinyRest($this->baseDir, $this->namespace);
+        $rest = new MiRest($this->baseDir, $this->namespace);
         $response = $rest->handle(new Request('GET', '/users', query: ['page' => '2']));
         $this->assertSame(200, $response->status);
         $data = json_decode($response->body, true);
@@ -51,7 +51,7 @@ class TinyRestTest extends TestCase
 
     public function testPostUsers(): void
     {
-        $rest = new TinyRest($this->baseDir, $this->namespace);
+        $rest = new MiRest($this->baseDir, $this->namespace);
         $response = $rest->handle(new Request('POST', '/users', body: ['name' => 'Alice']));
         $this->assertSame(201, $response->status);
         $data = json_decode($response->body, true);
@@ -61,7 +61,7 @@ class TinyRestTest extends TestCase
 
     public function testGetSingleUser(): void
     {
-        $rest = new TinyRest($this->baseDir, $this->namespace);
+        $rest = new MiRest($this->baseDir, $this->namespace);
         $response = $rest->handle(new Request('GET', '/users/42'));
         $this->assertSame(200, $response->status);
         $data = json_decode($response->body, true);
@@ -71,7 +71,7 @@ class TinyRestTest extends TestCase
 
     public function testPutUser(): void
     {
-        $rest = new TinyRest($this->baseDir, $this->namespace);
+        $rest = new MiRest($this->baseDir, $this->namespace);
         $response = $rest->handle(new Request('PUT', '/users/42'));
         $this->assertSame(200, $response->status);
         $data = json_decode($response->body, true);
@@ -80,7 +80,7 @@ class TinyRestTest extends TestCase
 
     public function testDeleteUser(): void
     {
-        $rest = new TinyRest($this->baseDir, $this->namespace);
+        $rest = new MiRest($this->baseDir, $this->namespace);
         $response = $rest->handle(new Request('DELETE', '/users/42'));
         $this->assertSame(200, $response->status);
         $data = json_decode($response->body, true);
@@ -89,7 +89,7 @@ class TinyRestTest extends TestCase
 
     public function testNestedResource(): void
     {
-        $rest = new TinyRest($this->baseDir, $this->namespace);
+        $rest = new MiRest($this->baseDir, $this->namespace);
         $response = $rest->handle(new Request('GET', '/users/42/posts'));
         $this->assertSame(200, $response->status);
         $data = json_decode($response->body, true);
@@ -101,7 +101,7 @@ class TinyRestTest extends TestCase
 
     public function testNotFound(): void
     {
-        $rest = new TinyRest($this->baseDir, $this->namespace);
+        $rest = new MiRest($this->baseDir, $this->namespace);
         $response = $rest->handle(new Request('GET', '/nonexistent'));
         $this->assertSame(404, $response->status);
         $data = json_decode($response->body, true);
@@ -110,7 +110,7 @@ class TinyRestTest extends TestCase
 
     public function testCustomNotFoundHandler(): void
     {
-        $rest = new TinyRest($this->baseDir, $this->namespace);
+        $rest = new MiRest($this->baseDir, $this->namespace);
         $rest->notFound(fn() => Response::html('<h1>404</h1>', 404));
         $response = $rest->handle(new Request('GET', '/nonexistent'));
         $this->assertSame(404, $response->status);
@@ -119,7 +119,7 @@ class TinyRestTest extends TestCase
 
     public function testMethodNotAllowed(): void
     {
-        $rest = new TinyRest($this->baseDir, $this->namespace);
+        $rest = new MiRest($this->baseDir, $this->namespace);
         // users/Index does not implement patch
         $response = $rest->handle(new Request('PATCH', '/users'));
         $this->assertSame(405, $response->status);
@@ -127,7 +127,7 @@ class TinyRestTest extends TestCase
 
     public function testErrorHandler(): void
     {
-        $rest = new TinyRest($this->baseDir, $this->namespace);
+        $rest = new MiRest($this->baseDir, $this->namespace);
         $rest->before(function () { throw new \RuntimeException('boom'); });
         $response = $rest->handle(new Request('GET', '/'));
         $this->assertSame(500, $response->status);
@@ -137,7 +137,7 @@ class TinyRestTest extends TestCase
 
     public function testCustomErrorHandler(): void
     {
-        $rest = new TinyRest($this->baseDir, $this->namespace);
+        $rest = new MiRest($this->baseDir, $this->namespace);
         $rest->error(fn(\Throwable $e) => Response::json(['msg' => $e->getMessage()], 503));
         $rest->before(function () { throw new \RuntimeException('custom error'); });
         $response = $rest->handle(new Request('GET', '/'));
@@ -150,7 +150,7 @@ class TinyRestTest extends TestCase
 
     public function testBeforeHookShortCircuit(): void
     {
-        $rest = new TinyRest($this->baseDir, $this->namespace);
+        $rest = new MiRest($this->baseDir, $this->namespace);
         $rest->before(fn(Request $r) => Response::json(['blocked' => true], 401));
         $response = $rest->handle(new Request('GET', '/'));
         $this->assertSame(401, $response->status);
@@ -160,7 +160,7 @@ class TinyRestTest extends TestCase
 
     public function testBeforeHookPassesThrough(): void
     {
-        $rest = new TinyRest($this->baseDir, $this->namespace);
+        $rest = new MiRest($this->baseDir, $this->namespace);
         $called = false;
         $rest->before(function (Request $r) use (&$called) {
             $called = true;
@@ -173,7 +173,7 @@ class TinyRestTest extends TestCase
 
     public function testAfterHookModifiesResponse(): void
     {
-        $rest = new TinyRest($this->baseDir, $this->namespace);
+        $rest = new MiRest($this->baseDir, $this->namespace);
         $rest->after(function (Request $r, Response $resp) {
             return new Response(
                 body: $resp->body,
@@ -187,7 +187,7 @@ class TinyRestTest extends TestCase
 
     public function testMultipleBeforeHooks(): void
     {
-        $rest = new TinyRest($this->baseDir, $this->namespace);
+        $rest = new MiRest($this->baseDir, $this->namespace);
         $order = [];
         $rest->before(function () use (&$order) { $order[] = 1; return null; });
         $rest->before(function () use (&$order) { $order[] = 2; return null; });
@@ -200,7 +200,7 @@ class TinyRestTest extends TestCase
     public function testErrorLogging(): void
     {
         $logger = new ArrayLogger();
-        $rest = new TinyRest($this->baseDir, $this->namespace, $logger);
+        $rest = new MiRest($this->baseDir, $this->namespace, $logger);
         $rest->before(function () { throw new \RuntimeException('log test'); });
         $rest->handle(new Request('GET', '/'));
         $this->assertGreaterThan(0, $logger->count());
@@ -213,7 +213,7 @@ class TinyRestTest extends TestCase
 
     public function testCatchAllResource(): void
     {
-        $rest = new TinyRest($this->baseDir, $this->namespace);
+        $rest = new MiRest($this->baseDir, $this->namespace);
         $response = $rest->handle(new Request('GET', '/catchall/any/path'));
         $this->assertSame(200, $response->status);
         $data = json_decode($response->body, true);
@@ -226,7 +226,7 @@ class TinyRestTest extends TestCase
     {
         // Without namespace, it should still work if the class exists (just testing no crash)
         // Since our Fixtures are all under namespace, this test verifies passing no namespace doesn't cause a fatal error
-        $rest = new TinyRest($this->baseDir);
+        $rest = new MiRest($this->baseDir);
         $response = $rest->handle(new Request('GET', '/nonexistent'));
         $this->assertSame(404, $response->status);
     }

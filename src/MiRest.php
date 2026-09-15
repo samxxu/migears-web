@@ -1,23 +1,23 @@
 <?php
 declare(strict_types=1);
 
-namespace TinyGears\Web;
+namespace MiGears\Web;
 
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 
 /**
- * TinyRest — a minimalist REST framework.
+ * MiRest — a minimalist REST framework.
  *
  * Core feature: directory-as-route. No need to define a route table;
  * the filesystem is the route table.
  *
  * Usage:
- *   $rest = new TinyRest(__DIR__ . '/resources', 'App\\Resources');
+ *   $rest = new MiRest(__DIR__ . '/resources', 'App\\Resources');
  *   $response = $rest->handle(Request::fromGlobals());
  *   $response->send();
  */
-final class TinyRest
+final class MiRest
 {
     private ResourceLocator $locator;
     private LoggerInterface $logger;

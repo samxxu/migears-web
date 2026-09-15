@@ -1,10 +1,10 @@
 <?php
 declare(strict_types=1);
 
-namespace TinyGears\Web\Tests;
+namespace MiGears\Web\Tests;
 
 use PHPUnit\Framework\TestCase;
-use TinyGears\Web\Response;
+use MiGears\Web\Response;
 
 class ResponseTest extends TestCase
 {

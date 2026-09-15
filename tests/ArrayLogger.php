@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 
-namespace TinyGears\Web\Tests;
+namespace MiGears\Web\Tests;
 
 use Psr\Log\AbstractLogger;
 

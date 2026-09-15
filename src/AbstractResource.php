@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 
-namespace TinyGears\Web;
+namespace MiGears\Web;
 
 /**
  * REST resource base class.
@@ -20,7 +20,7 @@ abstract class AbstractResource
     protected array $params = [];
 
     /**
-     * Set named parameters (called by TinyRest).
+     * Set named parameters (called by MiRest).
      *
      * @param array<string, string> $params
      */

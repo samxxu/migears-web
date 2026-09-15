@@ -1,11 +1,11 @@
 <?php
 declare(strict_types=1);
 
-namespace TinyGears\Web\Tests\Fixtures\Resources\Catchall;
+namespace MiGears\Web\Tests\Fixtures\Resources\Catchall;
 
-use TinyGears\Web\AbstractResource;
-use TinyGears\Web\Request;
-use TinyGears\Web\Response;
+use MiGears\Web\AbstractResource;
+use MiGears\Web\Request;
+use MiGears\Web\Response;
 
 class CatchAllResource extends AbstractResource
 {

@@ -1,4 +1,4 @@
-# tinygears/web
+# migears/web
 
 A minimalist REST framework with directory-as-routing. Zero magic, zero global variables, core code under 600 lines.
 
@@ -16,7 +16,7 @@ A minimalist REST framework with directory-as-routing. Zero magic, zero global v
 ## Installation
 
 ```bash
-composer require tinygears/web
+composer require migears/web
 ```
 
 ## Quick Start
@@ -42,9 +42,9 @@ resources/
 <?php
 // resources/Users/___user_id___/Index.php
 
-use TinyGears\Web\AbstractResource;
-use TinyGears\Web\Request;
-use TinyGears\Web\Response;
+use miGears\Web\AbstractResource;
+use miGears\Web\Request;
+use miGears\Web\Response;
 
 class Index extends AbstractResource
 {
@@ -73,7 +73,7 @@ class Index extends AbstractResource
     protected function after(Request $request, Response $response): Response
     {
         // Modify the response and return it
-        return $response->withHeader('X-Powered-By', 'tinygears');
+        return $response->withHeader('X-Powered-By', 'migears');
     }
 }
 ```
@@ -82,10 +82,10 @@ class Index extends AbstractResource
 
 ```php
 <?php
-use TinyGears\Web\TinyRest;
-use TinyGears\Web\Request;
+use miGears\Web\MiRest;
+use miGears\Web\Request;
 
-$rest = new TinyRest(
+$rest = new MiRest(
     baseDir: __DIR__ . '/resources',
     namespace: 'App\\Resources',
 );
@@ -111,7 +111,7 @@ URL segments are automatically converted to StudlyCase to match directory names 
 
 ## API Reference
 
-### TinyRest
+### MiRest
 
 ```php
 public function handle(Request $request): Response
@@ -170,7 +170,7 @@ MIT
 
 ---
 
-# tinygears/web
+# migears/web
 
 极简 REST 框架，目录即路由。零魔法、零全局变量，核心代码不到 600 行。
 
@@ -188,7 +188,7 @@ MIT
 ## 安装
 
 ```bash
-composer require tinygears/web
+composer require migears/web
 ```
 
 ## 快速开始
@@ -214,9 +214,9 @@ resources/
 <?php
 // resources/Users/___user_id___/Index.php
 
-use TinyGears\Web\AbstractResource;
-use TinyGears\Web\Request;
-use TinyGears\Web\Response;
+use miGears\Web\AbstractResource;
+use miGears\Web\Request;
+use miGears\Web\Response;
 
 class Index extends AbstractResource
 {
@@ -245,7 +245,7 @@ class Index extends AbstractResource
     protected function after(Request $request, Response $response): Response
     {
         // 修改响应后返回
-        return $response->withHeader('X-Powered-By', 'tinygears');
+        return $response->withHeader('X-Powered-By', 'migears');
     }
 }
 ```
@@ -254,10 +254,10 @@ class Index extends AbstractResource
 
 ```php
 <?php
-use TinyGears\Web\TinyRest;
-use TinyGears\Web\Request;
+use miGears\Web\MiRest;
+use miGears\Web\Request;
 
-$rest = new TinyRest(
+$rest = new MiRest(
     baseDir: __DIR__ . '/resources',
     namespace: 'App\\Resources',
 );
@@ -283,7 +283,7 @@ URL 段会自动转 StudlyCase 匹配目录名（`/users` → `Users`，`/blog_p
 
 ## API 参考
 
-### TinyRest
+### MiRest
 
 ```php
 public function handle(Request $request): Response
