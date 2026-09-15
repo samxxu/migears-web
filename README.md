@@ -1,5 +1,7 @@
 # migears/web
 
+![Version](https://img.shields.io/badge/version-2.0.0-blue)
+
 A minimalist REST framework with directory-as-routing. Zero magic, zero global variables, core code under 600 lines.
 
 ## Features
@@ -42,9 +44,9 @@ resources/
 <?php
 // resources/Users/___user_id___/Index.php
 
-use miGears\Web\AbstractResource;
-use miGears\Web\Request;
-use miGears\Web\Response;
+use MiGears\Web\AbstractResource;
+use MiGears\Web\Request;
+use MiGears\Web\Response;
 
 class Index extends AbstractResource
 {
@@ -82,8 +84,8 @@ class Index extends AbstractResource
 
 ```php
 <?php
-use miGears\Web\MiRest;
-use miGears\Web\Request;
+use MiGears\Web\MiRest;
+use MiGears\Web\Request;
 
 $rest = new MiRest(
     baseDir: __DIR__ . '/resources',
@@ -172,6 +174,8 @@ MIT
 
 # migears/web
 
+![Version](https://img.shields.io/badge/version-2.0.0-blue)
+
 极简 REST 框架，目录即路由。零魔法、零全局变量，核心代码不到 600 行。
 
 ## 特性
@@ -214,9 +218,9 @@ resources/
 <?php
 // resources/Users/___user_id___/Index.php
 
-use miGears\Web\AbstractResource;
-use miGears\Web\Request;
-use miGears\Web\Response;
+use MiGears\Web\AbstractResource;
+use MiGears\Web\Request;
+use MiGears\Web\Response;
 
 class Index extends AbstractResource
 {
@@ -254,8 +258,8 @@ class Index extends AbstractResource
 
 ```php
 <?php
-use miGears\Web\MiRest;
-use miGears\Web\Request;
+use MiGears\Web\MiRest;
+use MiGears\Web\Request;
 
 $rest = new MiRest(
     baseDir: __DIR__ . '/resources',

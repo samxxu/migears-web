@@ -1,6 +1,6 @@
 {
     "name": "migears/web",
-    "description": "miGears Web — 极简 REST 框架，目录即路由",
+    "description": "TinyGears Web — 极简 REST 框架，目录即路由",
     "type": "library",
     "license": "MIT",
     "keywords": [
