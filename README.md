@@ -12,6 +12,7 @@ A minimalist REST framework with directory-as-routing. Zero magic, zero global v
 - **Minimal dependencies** — Only depends on `psr/log`
 - **Under 600 lines** — Read the entire framework in one sitting
 - **No global variables, no singletons** — Fully testable and injectable
+- **Built-in service registry** — Register only what needs configuration (PDO, Redis, Logger); everything else is just `new`
 - **`before()` / `after()` hooks** — Lightweight middleware alternative
 - **`___param___` wildcard directories** — Capture URL segments as named parameters
 
@@ -92,9 +93,47 @@ $rest = new MiRest(
     namespace: 'App\\Resources',
 );
 
+// Register only what needs configuration
+$rest->set(PDO::class, fn() => new PDO('mysql:host=localhost;dbname=app', 'user', 'pass'));
+
 $response = $rest->handle(Request::fromGlobals());
 $response->send();
 ```
+
+## Service Registry
+
+MiRest has a built-in service registry for things that need configuration.
+**Only register what needs configuration** — everything else is just `new`.
+
+```php
+// Register (singleton by default)
+$rest->set(PDO::class, fn() => new PDO('mysql:host=localhost;dbname=app', 'user', 'pass'));
+$rest->set('logger', fn() => new Monolog\Logger('app'));
+$rest->set(RedisCache::class, fn() => new RedisCache(new Redis(), 'localhost', 6379));
+
+// Check
+$rest->has(PDO::class);  // true
+
+// Get (singleton)
+$pdo = $rest->service(PDO::class);
+```
+
+Inside a resource, use `$this->service()`:
+
+```php
+class Users extends AbstractResource
+{
+    public function GET(Request $request): Response
+    {
+        $pdo = $this->service(PDO::class);     // Get registered service
+        $dao = new UserDao($pdo);              // Just new — no DI needed
+        return Response::json($dao->getAll());
+    }
+}
+```
+
+**Principle**: Services that need configuration → register via `set()`.
+Services that don't (Request, Response, Form, Str, etc.) → just `new`.
 
 ## Routing Rules
 
@@ -126,6 +165,9 @@ $rest->before(callable $handler): self      // Global before hook
 $rest->after(callable $handler): self       // Global after hook
 $rest->notFound(callable $handler): self    // Custom 404 handler
 $rest->error(callable $handler): self       // Custom exception handler
+$rest->set(string $id, callable $factory): self    // Register service
+$rest->has(string $id): bool                       // Check service exists
+$rest->service(string $id): mixed                   // Get service (singleton)
 ```
 
 ### Request
@@ -163,6 +205,7 @@ $response->send(): void
 | `before(Request): ?Response` | Before hook, short-circuits if a response is returned |
 | `after(Request, Response): Response` | After hook, modifies and returns the response |
 | `param(string $name, mixed $default = null): mixed` | Get a named route parameter |
+| `service(string $id): mixed` | Get a registered service (PDO, Logger, etc.) |
 | `assertInt(mixed, string): int` | Validate as integer, throws 404 on failure |
 | `$this->params` | All named parameters array |
 
@@ -186,6 +229,7 @@ MIT
 - **依赖极少** — 仅依赖 `psr/log`
 - **不到 600 行** — 一口气读完整个框架
 - **无全局变量、无单例** — 完全可测试、可注入
+- **内置服务注册器** — 只注册需要配置的部分（PDO、Redis、Logger），其他直接 `new`
 - **`before()` / `after()` 钩子** — 轻量级中间件替代方案
 - **`___param___` 通配符目录** — 捕获 URL 段作为命名参数
 
@@ -266,9 +310,45 @@ $rest = new MiRest(
     namespace: 'App\\Resources',
 );
 
+// 只注册需要配置的服务
+$rest->set(PDO::class, fn() => new PDO('mysql:host=localhost;dbname=app', 'user', 'pass'));
+
 $response = $rest->handle(Request::fromGlobals());
 $response->send();
 ```
+
+## 服务注册器
+
+MiRest 内置轻量服务注册器，**只注册需要配置的部分**，其他直接 `new`。
+
+```php
+// 注册（默认单例）
+$rest->set(PDO::class, fn() => new PDO('mysql:host=localhost;dbname=app', 'user', 'pass'));
+$rest->set('logger', fn() => new Monolog\Logger('app'));
+$rest->set(RedisCache::class, fn() => new RedisCache(new Redis(), 'localhost', 6379));
+
+// 检查
+$rest->has(PDO::class);  // true
+
+// 获取（单例）
+$pdo = $rest->service(PDO::class);
+```
+
+在资源类内用 `$this->service()` 获取：
+
+```php
+class Users extends AbstractResource
+{
+    public function GET(Request $request): Response
+    {
+        $pdo = $this->service(PDO::class);     // 获取已注册服务
+        $dao = new UserDao($pdo);              // 直接 new — 不需要 DI
+        return Response::json($dao->getAll());
+    }
+}
+```
+
+**原则**：需要配置的服务 → 用 `set()` 注册。不需要配置的（Request、Response、Form、Str 等）→ 直接 `new`。
 
 ## 路由规则
 
@@ -300,6 +380,9 @@ $rest->before(callable $handler): self      // 全局前置钩子
 $rest->after(callable $handler): self       // 全局后置钩子
 $rest->notFound(callable $handler): self    // 自定义 404
 $rest->error(callable $handler): self       // 自定义异常处理
+$rest->set(string $id, callable $factory): self    // 注册服务
+$rest->has(string $id): bool                       // 检查服务是否存在
+$rest->service(string $id): mixed                   // 获取服务（单例）
 ```
 
 ### Request
@@ -337,6 +420,7 @@ $response->send(): void
 | `before(Request): ?Response` | 前置钩子，返回响应则短路 |
 | `after(Request, Response): Response` | 后置钩子，修改并返回响应 |
 | `param(string $name, mixed $default = null): mixed` | 获取命名路由参数 |
+| `service(string $id): mixed` | 获取已注册服务（PDO、Logger 等） |
 | `assertInt(mixed, string): int` | 验证整数，失败抛 404 |
 | `$this->params` | 所有命名参数数组 |
 

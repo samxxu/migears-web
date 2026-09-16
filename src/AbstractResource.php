@@ -9,6 +9,9 @@ namespace MiGears\Web;
  * Resource classes extend this class and implement the corresponding HTTP methods
  * (GET/POST/PUT/DELETE, etc., uppercase).
  * Methods accept a Request and return a Response.
+ *
+ * Service registry: use $this->service(PDO::class) to access registered services.
+ * Only register things that need configuration (PDO, Redis, Logger, etc.).
  */
 abstract class AbstractResource
 {
@@ -19,6 +22,8 @@ abstract class AbstractResource
      */
     protected array $params = [];
 
+    private MiRest $rest;
+
     /**
      * Set named parameters (called by MiRest).
      *
@@ -27,6 +32,26 @@ abstract class AbstractResource
     public function setParams(array $params): void
     {
         $this->params = $params;
+    }
+
+    /**
+     * Set the MiRest instance (called by MiRest during resource creation).
+     */
+    public function setRest(MiRest $rest): void
+    {
+        $this->rest = $rest;
+    }
+
+    /**
+     * Get a registered service by ID (class name or custom string).
+     * Returns null if the service is not registered.
+     *
+     * Only services registered via MiRest::set() are available.
+     * For things that don't need configuration, just use `new`.
+     */
+    protected function service(string $id): mixed
+    {
+        return $this->rest->service($id);
     }
 
     /**

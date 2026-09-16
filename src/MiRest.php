@@ -12,8 +12,13 @@ use Psr\Log\NullLogger;
  * Core feature: directory-as-route. No need to define a route table;
  * the filesystem is the route table.
  *
+ * Built-in service registry: register only what needs configuration
+ * (PDO, Redis, Logger, etc.). Everything else is just `new`.
+ *
  * Usage:
  *   $rest = new MiRest(__DIR__ . '/resources', 'App\\Resources');
+ *   $rest->set(PDO::class, fn() => new PDO('mysql:host=localhost;dbname=app', 'user', 'pass'));
+ *   $rest->set('logger', fn() => new Monolog\Logger('app'));
  *   $response = $rest->handle(Request::fromGlobals());
  *   $response->send();
  */
@@ -23,6 +28,12 @@ final class MiRest
 
     private ResourceLocator $locator;
     private LoggerInterface $logger;
+
+    /** @var array<string, callable(): mixed> */
+    private array $factories = [];
+
+    /** @var array<string, mixed> */
+    private array $instances = [];
 
     /** @var list<callable(Request): ?Response> */
     private array $beforeHandlers = [];
@@ -43,6 +54,44 @@ final class MiRest
     ) {
         $this->locator = new ResourceLocator($baseDir);
         $this->logger = $logger ?? new NullLogger();
+    }
+
+    /**
+     * Register a service. Only for things that need configuration
+     * (PDO, Redis, Logger, etc.). Everything else: just `new`.
+     *
+     * @param string $id Service ID (class name or custom string)
+     * @param callable(): mixed $factory Factory that creates the instance
+     */
+    public function set(string $id, callable $factory): self
+    {
+        $this->factories[$id] = $factory;
+        unset($this->instances[$id]);
+        return $this;
+    }
+
+    /**
+     * Check if a service is registered.
+     */
+    public function has(string $id): bool
+    {
+        return isset($this->factories[$id]) || isset($this->instances[$id]);
+    }
+
+    /**
+     * Get a service instance (singleton). Returns null if not registered.
+     */
+    public function service(string $id): mixed
+    {
+        if (isset($this->instances[$id])) {
+            return $this->instances[$id];
+        }
+
+        if (!isset($this->factories[$id])) {
+            return null;
+        }
+
+        return $this->instances[$id] = ($this->factories[$id])();
     }
 
     /**
@@ -194,6 +243,7 @@ final class MiRest
         if (!$resource instanceof AbstractResource) {
             throw new \RuntimeException("Resource must extend AbstractResource: $className");
         }
+        $resource->setRest($this);
         return $resource;
     }
 }
