@@ -15,7 +15,7 @@ namespace MiGears\Web;
  * URL to directory name conversion: URL segments are automatically converted to StudlyCase before matching.
  * For example /users → Users directory, /blog_posts → BlogPosts directory.
  */
-final class ResourceLocator
+class ResourceLocator
 {
     public function __construct(
         private readonly string $baseDir,

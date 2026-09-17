@@ -22,7 +22,7 @@ use Psr\Log\NullLogger;
  *   $response = $rest->handle(Request::fromGlobals());
  *   $response->send();
  */
-final class MiRest
+class MiRest
 {
     public const VERSION = '2.0.0';
 
