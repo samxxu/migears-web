@@ -16,6 +16,7 @@ final class Request
         public readonly array $body = [],
         public readonly array $headers = [],
         public readonly array $server = [],
+        public readonly array $files = [],
     ) {}
 
     /**
@@ -44,6 +45,7 @@ final class Request
             body: $body,
             headers: $headers,
             server: $_SERVER,
+            files: $_FILES,
         );
     }
 
