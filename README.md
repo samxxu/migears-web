@@ -179,6 +179,7 @@ $request->query       // Query parameter array
 $request->body        // Parsed body array (JSON/form)
 $request->headers     // Request header array
 $request->server      // $_SERVER array
+$request->files       // Uploaded files array ($_FILES)
 
 $request->header(string $name, mixed $default = null): mixed
 Request::fromGlobals(): self
@@ -394,6 +395,7 @@ $request->query       // 查询参数数组
 $request->body        // 解析后的 body 数组（JSON/表单）
 $request->headers     // 请求头数组
 $request->server      // $_SERVER 数组
+$request->files       // 上传文件数组（$_FILES）
 
 $request->header(string $name, mixed $default = null): mixed
 Request::fromGlobals(): self
