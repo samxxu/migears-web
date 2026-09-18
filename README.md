@@ -12,7 +12,7 @@ A minimalist REST framework with directory-as-routing. Zero magic, zero global v
 - **Minimal dependencies** — Only depends on `psr/log`
 - **Under 600 lines** — Read the entire framework in one sitting
 - **No global variables, no singletons** — Fully testable and injectable
-- **Built-in service registry** — Register only what needs configuration (PDO, Redis, Logger); everything else is just `new`
+- **Built-in DI container** — Register only what needs configuration (PDO, Redis, Logger); everything else is just `new`
 - **`before()` / `after()` hooks** — Lightweight middleware alternative
 - **`___param___` wildcard directories** — Capture URL segments as named parameters
 
@@ -100,40 +100,70 @@ $response = $rest->handle(Request::fromGlobals());
 $response->send();
 ```
 
-## Service Registry
+## Dependency Injection (DI) Container
 
-MiRest has a built-in service registry for things that need configuration.
-**Only register what needs configuration** — everything else is just `new`.
+MiRest ships with a tiny built-in DI container for wiring **only the services that need configuration** (PDO, Redis, Logger, ...). Everything that doesn't need setup is just `new` — no container involved. This keeps the framework free of magic while staying fully injectable and testable.
+
+### Design philosophy
+
+- **Register only what needs configuration** — the container exists for objects with setup (DSNs, hosts, credentials). Pure value objects (Request, Response, Form, Str, ...) are simply `new`'d in place.
+- **Closure-based, lazy factories** — each service is a factory closure. It is **not** executed until first requested, and its result is cached.
+- **Singleton by default** — every service resolves to one shared instance for the lifetime of the `MiRest` object.
+- **Opt-in, no auto-wiring** — there is no reflection and no magical resolution; a service must be registered explicitly to be used. Explicit beats magical: this keeps the whole container under ~30 lines and instantly readable.
+- **No globals, no static** — the container lives on the `MiRest` instance and is handed to every resource.
+
+### The whole API: three methods
 
 ```php
-// Register (singleton by default)
-$rest->set(PDO::class, fn() => new PDO('mysql:host=localhost;dbname=app', 'user', 'pass'));
-$rest->set('logger', fn() => new Monolog\Logger('app'));
-$rest->set(RedisCache::class, fn() => new RedisCache(new Redis(), 'localhost', 6379));
-
-// Check
-$rest->has(PDO::class);  // true
-
-// Get (singleton)
-$pdo = $rest->service(PDO::class);
+$rest->set(string $id, callable $factory): self   // Register a factory (lazy)
+$rest->has(string $id): bool                       // Registered (factory pending or resolved)?
+$rest->service(string $id): mixed                   // Resolve the instance (cached for reuse)
 ```
 
-Inside a resource, use `$this->service()`:
+`$id` is either a class name (`PDO::class`) or any custom string (`'logger'`), so interfaces and friendly aliases work naturally.
+
+**Lazy-singleton flow**:
+
+```php
+$rest->set(PDO::class, fn() => new PDO('mysql:host=localhost;dbname=app', 'user', 'pass'));
+
+$rest->has(PDO::class);      // true — factory registered (not yet resolved)
+$rest->service(PDO::class);  // 1st call runs the factory, caches the result
+$rest->service(PDO::class);  // 2nd call returns the SAME cached instance
+
+$pdo = $rest->service('missing'); // null — not registered (no exception)
+```
+
+Re-registering with `set()` replaces the factory **and drops the cached instance**, so the next `service()` call builds a fresh object — handy for redeploy/rebuild or tests.
+
+### Using services inside resources
+
+Each resource receives the container (via its `MiRest` instance) and resolves services through `$this->service()`:
 
 ```php
 class Users extends AbstractResource
 {
     public function GET(Request $request): Response
     {
-        $pdo = $this->service(PDO::class);     // Get registered service
-        $dao = new UserDao($pdo);              // Just new — no DI needed
+        $pdo = $this->service(PDO::class);   // shared PDO from the container
+        $dao = new UserDao($pdo);             // plain `new` — no container needed
         return Response::json($dao->getAll());
     }
 }
 ```
 
-**Principle**: Services that need configuration → register via `set()`.
-Services that don't (Request, Response, Form, Str, etc.) → just `new`.
+Typical bootstrap wiring:
+
+```php
+$rest = new MiRest(baseDir: __DIR__ . '/resources', namespace: 'App\\Resources');
+
+$rest->set(PDO::class,         fn() => new PDO('mysql:host=localhost;dbname=app', 'user', 'pass'));
+$rest->set('logger',           fn() => new Monolog\Logger('app'));
+$rest->set(RedisCache::class, fn() => new RedisCache(new Redis(), 'localhost', 6379));
+```
+
+**Rule of thumb**: needs configuration → register via `set()`.
+Needs nothing → just `new`. Either way your code never depends on container magic.
 
 ## Routing Rules
 
@@ -230,7 +260,7 @@ MIT
 - **依赖极少** — 仅依赖 `psr/log`
 - **不到 600 行** — 一口气读完整个框架
 - **无全局变量、无单例** — 完全可测试、可注入
-- **内置服务注册器** — 只注册需要配置的部分（PDO、Redis、Logger），其他直接 `new`
+- **内置 DI 容器** — 只注册需要配置的部分（PDO、Redis、Logger），其他直接 `new`
 - **`before()` / `after()` 钩子** — 轻量级中间件替代方案
 - **`___param___` 通配符目录** — 捕获 URL 段作为命名参数
 
@@ -318,38 +348,69 @@ $response = $rest->handle(Request::fromGlobals());
 $response->send();
 ```
 
-## 服务注册器
+## 依赖注入（DI）容器
 
-MiRest 内置轻量服务注册器，**只注册需要配置的部分**，其他直接 `new`。
+MiRest 内置一个极简 DI 容器，只用于装配**需要配置的服务**（PDO、Redis、Logger 等）。不需要配置的，直接用 `new`，完全绕开容器。这样既保持框架零魔法，又做到完全可注入、可测试。
+
+### 设计哲学
+
+- **只注册需要配置的部分** — 容器存在的意义是有配置需求的对象（DSN、主机、账号密码）。纯粹的值对象（Request、Response、Form、Str 等）就地 `new` 即可。
+- **闭包工厂、懒加载** — 每个服务都是一个工厂闭包，**首次被请求时才执行**，结果会被缓存。
+- **默认单例** — 每个服务在 `MiRest` 对象生命周期内只解析出一个共享实例。
+- **显式登记，不做自动装配** — 没有反射、没有魔法解析；想用某个服务必须显式 `set()`。显式优于魔法：这让整个容器保持在 30 行以内，可一口气读懂。
+- **无全局、无静态** — 容器挂在 `MiRest` 实例上，随框架注入到每个资源。
+
+### 全部 API 只有三个方法
 
 ```php
-// 注册（默认单例）
-$rest->set(PDO::class, fn() => new PDO('mysql:host=localhost;dbname=app', 'user', 'pass'));
-$rest->set('logger', fn() => new Monolog\Logger('app'));
-$rest->set(RedisCache::class, fn() => new RedisCache(new Redis(), 'localhost', 6379));
-
-// 检查
-$rest->has(PDO::class);  // true
-
-// 获取（单例）
-$pdo = $rest->service(PDO::class);
+$rest->set(string $id, callable $factory): self   // 注册工厂（懒加载）
+$rest->has(string $id): bool                       // 是否已注册（未解析工厂或已解析实例）
+$rest->service(string $id): mixed                   // 解析实例（缓存复用）
 ```
 
-在资源类内用 `$this->service()` 获取：
+`$id` 可以是类名（`PDO::class`），也可以是任意字符串别名（`'logger'`），因此接口、友好别名都能自然使用。
+
+**懒加载单例的流程**：
+
+```php
+$rest->set(PDO::class, fn() => new PDO('mysql:host=localhost;dbname=app', 'user', 'pass'));
+
+$rest->has(PDO::class);      // true — 工厂已注册（尚未解析）
+$rest->service(PDO::class);  // 第 1 次调用：执行工厂并缓存结果
+$rest->service(PDO::class);  // 第 2 次调用：返回同一个缓存实例
+
+$pdo = $rest->service('missing'); // null — 未注册（不抛异常）
+```
+
+重新 `set()` 会替换工厂**并丢弃已缓存的实例**，下次 `service()` 会构建全新对象——适合重新部署或测试场景。
+
+### 在资源类内使用服务
+
+每个资源都会拿到（其所属 `MiRest` 的）容器，通过 `$this->service()` 解析服务：
 
 ```php
 class Users extends AbstractResource
 {
     public function GET(Request $request): Response
     {
-        $pdo = $this->service(PDO::class);     // 获取已注册服务
-        $dao = new UserDao($pdo);              // 直接 new — 不需要 DI
+        $pdo = $this->service(PDO::class);   // 容器中的共享 PDO
+        $dao = new UserDao($pdo);             // 普通 `new` — 不需要容器
         return Response::json($dao->getAll());
     }
 }
 ```
 
-**原则**：需要配置的服务 → 用 `set()` 注册。不需要配置的（Request、Response、Form、Str 等）→ 直接 `new`。
+典型的启动装配：
+
+```php
+$rest = new MiRest(baseDir: __DIR__ . '/resources', namespace: 'App\\Resources');
+
+$rest->set(PDO::class,          fn() => new PDO('mysql:host=localhost;dbname=app', 'user', 'pass'));
+$rest->set('logger',            fn() => new Monolog\Logger('app'));
+$rest->set(RedisCache::class, fn() => new RedisCache(new Redis(), 'localhost', 6379));
+```
+
+**经验法则**：需要配置 → 用 `set()` 注册。不需要配置 → 直接 `new`。无论哪种方式，你的业务代码都不依赖容器的任何魔法。
 
 ## 路由规则
 
