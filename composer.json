@@ -1,8 +1,9 @@
 {
     "name": "migears/web",
-    "description": "TinyGears Web — 极简 REST 框架，目录即路由",
+    "description": "miGears Web — 极简 REST 框架，目录即路由",
     "type": "library",
     "license": "MIT",
+    "version": "2.0.0",
     "keywords": [
         "php",
         "rest",
@@ -29,5 +30,8 @@
         }
     },
     "minimum-stability": "stable",
-    "prefer-stable": true
+    "prefer-stable": true,
+    "scripts": {
+        "test": "phpunit"
+    }
 }
