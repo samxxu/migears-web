@@ -4,6 +4,10 @@
 
 A minimalist REST framework with directory-as-routing. Zero magic, zero global variables, core code under 600 lines.
 
+> **Background**: miGears is the open-source successor of **TinyGears**, a
+> self-developed PHP framework. It was renamed and open-sourced recently because
+> the name *TinyGears* is already taken in the open-source community.
+
 ## Features
 
 - **Directory-as-routing** — The filesystem structure is your API, no routing table configuration needed
@@ -178,6 +182,8 @@ After the path is fully traversed, resource files are looked up in the following
 - `Index.php` — Index resource for the current directory
 - `CatchAllResource.php` — Catch-all resource
 
+Finally, the located resource serves the request through the template method `handle()` (`before` → HTTP method → `after`), so **hooks run consistently** whether or not extra path segments matched. A catch-all resource receives any unmatched remaining segments via `$this->remaining`.
+
 URL segments are automatically converted to StudlyCase to match directory names (`/users` → `Users`, `/blog_posts` → `BlogPosts`).
 
 ## API Reference
@@ -239,6 +245,7 @@ $response->send(): void
 | `service(string $id): mixed` | Get a registered service (PDO, Logger, etc.) |
 | `assertInt(mixed, string): int` | Validate as integer, throws 404 on failure |
 | `$this->params` | All named parameters array |
+| `$this->remaining` | Remaining path segments (only for catch-all resources) |
 
 ## License
 
@@ -251,6 +258,9 @@ MIT
 ![Version](https://img.shields.io/badge/version-2.0.0-blue)
 
 极简 REST 框架，目录即路由。零魔法、零全局变量，核心代码不到 600 行。
+
+> **背景**：miGears 源自自研 PHP 框架 **TinyGears**，因 TinyGears 这一名字
+> 已被开源社区占用，故近期更名并开源发布。
 
 ## 特性
 
@@ -425,6 +435,8 @@ $rest->set(RedisCache::class, fn() => new RedisCache(new Redis(), 'localhost', 6
 - `Index.php` — 当前目录的索引资源
 - `CatchAllResource.php` — 兜底资源
 
+最终，定位到的资源统一通过模板方法 `handle()`（`before` → HTTP 方法 → `after`）处理请求，因此**无论是否有多余路径段，前置/后置钩子行为一致**。兜底资源可通过 `$this->remaining` 拿到未匹配的剩余路径段。
+
 URL 段会自动转 StudlyCase 匹配目录名（`/users` → `Users`，`/blog_posts` → `BlogPosts`）。
 
 ## API 参考
@@ -486,6 +498,7 @@ $response->send(): void
 | `service(string $id): mixed` | 获取已注册服务（PDO、Logger 等） |
 | `assertInt(mixed, string): int` | 验证整数，失败抛 404 |
 | `$this->params` | 所有命名参数数组 |
+| `$this->remaining` | 剩余路径段（仅 catch-all 资源有值） |
 
 ## License
 

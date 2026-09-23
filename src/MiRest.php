@@ -161,9 +161,12 @@ class MiRest
             $resource = $this->createResource($className);
             $resource->setParams($params);
 
-            // Remaining path → dispatch to sub-resource
+            // Remaining path → the located resource (e.g. a catch-all) serves
+            // the rest of the path through the same template method, so the
+            // before/after hooks run consistently.
             if (!empty($remaining)) {
-                $response = $resource->handleSub($request, $remaining);
+                $resource->setRemaining($remaining);
+                $response = $resource->handle($request, $request->method);
                 return $this->runAfter($request, $response);
             }
 

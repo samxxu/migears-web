@@ -62,4 +62,71 @@ class RequestTest extends TestCase
         $this->expectException(\Error::class);
         $request->method = 'POST';
     }
+
+    // --- parseBody ---
+
+    public function testParseBodyPrefersPostForm(): void
+    {
+        $result = Request::parseBody(['name' => 'Alice'], '{"name":"Bob"}');
+        $this->assertSame(['name' => 'Alice'], $result);
+    }
+
+    public function testParseBodyParsesJsonWhenPostEmpty(): void
+    {
+        $result = Request::parseBody([], '{"key":"value"}');
+        $this->assertSame(['key' => 'value'], $result);
+    }
+
+    public function testParseBodyReturnsEmptyWhenNothing(): void
+    {
+        $this->assertSame([], Request::parseBody([], ''));
+        $this->assertSame([], Request::parseBody([], 'not-json'));
+    }
+
+    // --- fromGlobals ---
+
+    public function testFromGlobalsCollectsContentTypeAndLengthHeaders(): void
+    {
+        $this->withGlobals(
+            ['REQUEST_METHOD' => 'POST', 'REQUEST_URI' => '/users', 'CONTENT_TYPE' => 'application/json', 'CONTENT_LENGTH' => '15'],
+            [],
+            [],
+            function () {
+                $request = Request::fromGlobals();
+                $this->assertSame('application/json', $request->header('Content-Type'));
+                $this->assertSame('15', $request->header('Content-Length'));
+                $this->assertSame('POST', $request->method);
+                $this->assertSame('/users', $request->path);
+            },
+        );
+    }
+
+    public function testFromGlobalsDefaults(): void
+    {
+        $this->withGlobals([], [], [], function () {
+            $request = Request::fromGlobals();
+            $this->assertSame('GET', $request->method);
+            $this->assertSame('/', $request->path);
+        });
+    }
+
+    private function withGlobals(array $server, array $post, array $get, callable $fn): void
+    {
+        $prevServer = $_SERVER;
+        $prevPost = $_POST;
+        $prevGet = $_GET;
+        $prevFiles = $_FILES;
+        $_SERVER = $server;
+        $_POST = $post;
+        $_GET = $get;
+        $_FILES = [];
+        try {
+            $fn();
+        } finally {
+            $_SERVER = $prevServer;
+            $_POST = $prevPost;
+            $_GET = $prevGet;
+            $_FILES = $prevFiles;
+        }
+    }
 }

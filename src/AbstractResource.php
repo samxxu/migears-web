@@ -22,6 +22,14 @@ abstract class AbstractResource
      */
     protected array $params = [];
 
+    /**
+     * Remaining path segments after the located resource (only populated for
+     * catch-all resources; empty otherwise).
+     *
+     * @var list<string>
+     */
+    protected array $remaining = [];
+
     private MiRest $rest;
 
     /**
@@ -32,6 +40,16 @@ abstract class AbstractResource
     public function setParams(array $params): void
     {
         $this->params = $params;
+    }
+
+    /**
+     * Set remaining path segments (called by MiRest for catch-all resources).
+     *
+     * @param list<string> $remaining
+     */
+    public function setRemaining(array $remaining): void
+    {
+        $this->remaining = $remaining;
     }
 
     /**
@@ -52,6 +70,27 @@ abstract class AbstractResource
     protected function service(string $id): mixed
     {
         return $this->rest->service($id);
+    }
+
+    /**
+     * Get a named route parameter.
+     */
+    protected function param(string $name, mixed $default = null): mixed
+    {
+        return $this->params[$name] ?? $default;
+    }
+
+    /**
+     * Validate a value as an integer. Returns the int on success,
+     * throws a 404 ResourceNotFoundException on failure.
+     */
+    protected function assertInt(mixed $value, string $name): int
+    {
+        $int = filter_var($value, FILTER_VALIDATE_INT);
+        if ($int === false) {
+            throw new ResourceNotFoundException("Invalid integer for '$name'");
+        }
+        return $int;
     }
 
     /**
@@ -93,19 +132,6 @@ abstract class AbstractResource
     protected function after(Request $request, Response $response): Response
     {
         return $response;
-    }
-
-    /**
-     * Sub-resource dispatcher.
-     * Called when there are remaining segments in the URL path.
-     * Subclasses may override this method to dispatch sub-resources.
-     * Default returns 404.
-     *
-     * @param list<string> $remaining remaining path segments
-     */
-    public function handleSub(Request $request, array $remaining): Response
-    {
-        throw new ResourceNotFoundException();
     }
 
     /**

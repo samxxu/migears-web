@@ -59,6 +59,21 @@ class MiRestTest extends TestCase
         $this->assertSame('Alice', $data['name']);
     }
 
+    /**
+     * A JSON POST body must reach the resource (previously $_POST was empty
+     * for application/json, so the body was silently dropped).
+     */
+    public function testPostJsonBodyReachesResource(): void
+    {
+        $body = ['name' => 'Bob'];
+        $request = new Request('POST', '/users', body: Request::parseBody([], json_encode($body)));
+        $rest = new MiRest($this->baseDir, $this->namespace);
+        $response = $rest->handle($request);
+        $this->assertSame(201, $response->status);
+        $data = json_decode($response->body, true);
+        $this->assertSame('Bob', $data['name']);
+    }
+
     public function testGetSingleUser(): void
     {
         $rest = new MiRest($this->baseDir, $this->namespace);
@@ -97,6 +112,16 @@ class MiRestTest extends TestCase
         $this->assertCount(2, $data['posts']);
     }
 
+    public function testMultipleWildcardsThroughFramework(): void
+    {
+        $rest = new MiRest($this->baseDir, $this->namespace);
+        $response = $rest->handle(new Request('GET', '/regions/asia/tokyo'));
+        $this->assertSame(200, $response->status);
+        $data = json_decode($response->body, true);
+        $this->assertSame('asia', $data['region']);
+        $this->assertSame('tokyo', $data['location']);
+    }
+
     // --- Error handling tests ---
 
     public function testNotFound(): void
@@ -123,6 +148,24 @@ class MiRestTest extends TestCase
         // users/Index does not implement patch
         $response = $rest->handle(new Request('PATCH', '/users'));
         $this->assertSame(405, $response->status);
+    }
+
+    public function testOptionsViaFrameworkReturnsAllowHeader(): void
+    {
+        $rest = new MiRest($this->baseDir, $this->namespace);
+        // /users Index implements GET + POST
+        $response = $rest->handle(new Request('OPTIONS', '/users'));
+        $this->assertSame(204, $response->status);
+        $this->assertStringContainsString('GET', $response->headers['Allow']);
+        $this->assertStringContainsString('POST', $response->headers['Allow']);
+    }
+
+    public function testHeadViaFrameworkReturnsBodyless(): void
+    {
+        $rest = new MiRest($this->baseDir, $this->namespace);
+        $response = $rest->handle(new Request('HEAD', '/'));
+        $this->assertSame(200, $response->status);
+        $this->assertSame('', $response->body);
     }
 
     public function testErrorHandler(): void
@@ -218,6 +261,18 @@ class MiRestTest extends TestCase
         $this->assertSame(200, $response->status);
         $data = json_decode($response->body, true);
         $this->assertTrue($data['caught']);
+        $this->assertSame(['any', 'path'], $data['remaining']);
+        // with remaining path, the before/after hooks must still run
+        $this->assertSame('yes', $response->headers['X-Hooked']);
+    }
+
+    public function testCatchAllRootRunsHooks(): void
+    {
+        $rest = new MiRest($this->baseDir, $this->namespace);
+        $response = $rest->handle(new Request('GET', '/catchall'));
+        $this->assertSame(200, $response->status);
+        // without remaining path, hooks must also run (consistency)
+        $this->assertSame('yes', $response->headers['X-Hooked']);
     }
 
     // --- No namespace tests ---

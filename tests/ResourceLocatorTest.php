@@ -60,6 +60,17 @@ class ResourceLocatorTest extends TestCase
         $this->assertSame(['Users', 'UserId', 'Posts'], $result[4]);
     }
 
+    public function testMultipleWildcardParams(): void
+    {
+        $locator = new ResourceLocator($this->baseDir);
+        $result = $locator->locate('/regions/asia/tokyo');
+        $this->assertNotNull($result);
+        $this->assertSame('Index', $result[0]);
+        $this->assertSame(['region' => 'asia', 'location' => 'tokyo'], $result[2]);
+        $this->assertSame([], $result[3]);
+        $this->assertSame(['Regions', 'Region', 'Location'], $result[4]);
+    }
+
     public function testNotFound(): void
     {
         $locator = new ResourceLocator($this->baseDir);

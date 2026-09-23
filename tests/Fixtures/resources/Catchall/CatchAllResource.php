@@ -15,12 +15,16 @@ class CatchAllResource extends AbstractResource
             'caught' => true,
             'path' => $request->path,
             'params' => $this->params,
+            'remaining' => $this->remaining,
         ]);
     }
 
-    public function handleSub(Request $request, array $remaining): Response
+    protected function after(Request $request, Response $response): Response
     {
-        // CatchAll handles all remaining paths directly
-        return $this->GET($request);
+        return new Response(
+            body: $response->body,
+            status: $response->status,
+            headers: array_merge($response->headers, ['X-Hooked' => 'yes']),
+        );
     }
 }

@@ -31,22 +31,43 @@ final class Request
                 $headers[$name] = $v;
             }
         }
-
-        $body = $_POST;
-        if (empty($body) && in_array(($_SERVER['REQUEST_METHOD'] ?? ''), ['PUT', 'PATCH', 'DELETE'])) {
-            $input = file_get_contents('php://input') ?: '';
-            $body = (array) json_decode($input, true) ?: [];
+        // CONTENT_TYPE / CONTENT_LENGTH don't carry the HTTP_ prefix; collect them explicitly
+        foreach (['CONTENT_TYPE', 'CONTENT_LENGTH'] as $name) {
+            if (isset($_SERVER[$name])) {
+                $headers[strtolower(str_replace('_', '-', $name))] = $_SERVER[$name];
+            }
         }
 
         return new self(
             method: $_SERVER['REQUEST_METHOD'] ?? 'GET',
             path: parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/',
             query: $_GET,
-            body: $body,
+            body: self::parseBody($_POST, (string) (file_get_contents('php://input') ?: '')),
             headers: $headers,
             server: $_SERVER,
             files: $_FILES,
         );
+    }
+
+    /**
+     * Resolve the request body.
+     *
+     * Prefers the (form-)parsed $_POST. When $_POST is empty but a raw body is
+     * present (e.g. application/json POST/PUT/PATCH/DELETE), parses it as JSON.
+     *
+     * @param array<string, mixed> $post
+     * @return array<string, mixed>
+     */
+    public static function parseBody(array $post, string $rawInput): array
+    {
+        if (!empty($post)) {
+            return $post;
+        }
+        if ($rawInput === '') {
+            return [];
+        }
+        $decoded = json_decode($rawInput, true);
+        return is_array($decoded) ? $decoded : [];
     }
 
     /**

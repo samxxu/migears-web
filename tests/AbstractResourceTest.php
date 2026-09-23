@@ -106,6 +106,36 @@ class AbstractResourceTest extends TestCase
         $this->assertSame($response, $result);
     }
 
+    public function testHandleShortCircuitSkipsAfter(): void
+    {
+        $order = [];
+        $resource = new class($order) extends AbstractResource {
+            public array $order;
+            public function __construct(&$order) { $this->order = &$order; }
+            protected function before(Request $request): ?Response { $this->order[] = 'before'; return Response::json(['blocked' => true], 403); }
+            protected function after(Request $request, Response $response): Response { $this->order[] = 'after'; return $response; }
+            public function GET(Request $request): Response { $this->order[] = 'get'; return Response::json(['ok' => true]); }
+        };
+        $response = $resource->handle(new Request('GET', '/'), 'GET');
+        $this->assertSame(403, $response->status);
+        // before short-circuit must NOT run the resource-level after
+        $this->assertSame(['before'], $order);
+    }
+
+    public function testHandleRunsMethodThenAfter(): void
+    {
+        $order = [];
+        $resource = new class($order) extends AbstractResource {
+            public array $order;
+            public function __construct(&$order) { $this->order = &$order; }
+            protected function after(Request $request, Response $response): Response { $this->order[] = 'after'; return $response; }
+            public function GET(Request $request): Response { $this->order[] = 'get'; return Response::json(['ok' => true]); }
+        };
+        $response = $resource->handle(new Request('GET', '/'), 'GET');
+        $this->assertSame(200, $response->status);
+        $this->assertSame(['get', 'after'], $order);
+    }
+
     public function testAfterHookCanModifyResponse(): void
     {
         $resource = new class extends AbstractResource {
@@ -134,11 +164,40 @@ class AbstractResourceTest extends TestCase
         $this->assertSame(['id' => '42'], $this->getProtectedProperty($resource, 'params'));
     }
 
-    public function testHandleSubThrows404(): void
+    public function testSetRemaining(): void
+    {
+        $resource = $this->makeResource();
+        $resource->setRemaining(['extra', 'path']);
+        $this->assertSame(['extra', 'path'], $this->getProtectedProperty($resource, 'remaining'));
+    }
+
+    public function testParamReturnsValue(): void
+    {
+        $resource = $this->makeResource();
+        $resource->setParams(['user_id' => '42']);
+        $this->assertSame('42', $this->callProtected($resource, 'param', ['user_id']));
+    }
+
+    public function testParamReturnsDefaultWhenMissing(): void
+    {
+        $resource = $this->makeResource();
+        $resource->setParams([]);
+        $this->assertNull($this->callProtected($resource, 'param', ['missing']));
+        $this->assertSame('fallback', $this->callProtected($resource, 'param', ['missing', 'fallback']));
+    }
+
+    public function testAssertIntReturnsInt(): void
+    {
+        $resource = $this->makeResource();
+        $this->assertSame(42, $this->callProtected($resource, 'assertInt', ['42', 'user_id']));
+        $this->assertSame(-7, $this->callProtected($resource, 'assertInt', [-7, 'page']));
+    }
+
+    public function testAssertIntThrows404OnInvalid(): void
     {
         $resource = $this->makeResource();
         $this->expectException(\MiGears\Web\ResourceNotFoundException::class);
-        $resource->handleSub(new Request('GET', '/'), ['extra', 'path']);
+        $this->callProtected($resource, 'assertInt', ['abc', 'user_id']);
     }
 
     public function testGetAllowedMethodsIncludesImplementedOnes(): void
@@ -164,14 +223,12 @@ class AbstractResourceTest extends TestCase
     private function callProtected(object $object, string $method, array $args): mixed
     {
         $ref = new \ReflectionMethod($object, $method);
-        $ref->setAccessible(true);
         return $ref->invokeArgs($object, $args);
     }
 
     private function getProtectedProperty(object $object, string $property): mixed
     {
         $ref = new \ReflectionProperty($object, $property);
-        $ref->setAccessible(true);
         return $ref->getValue($object);
     }
 }
