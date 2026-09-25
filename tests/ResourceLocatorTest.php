@@ -127,4 +127,46 @@ class ResourceLocatorTest extends TestCase
         $this->assertFileExists($result[1]);
         $this->assertStringEndsWith('Users' . DIRECTORY_SEPARATOR . 'Index.php', $result[1]);
     }
+
+    public function testEmptyBaseDirThrows(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        new ResourceLocator('');
+    }
+
+    public function testMissingBaseDirThrows(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        new ResourceLocator('/nonexistent-resource-dir');
+    }
+
+    public function testDotSegmentDropped(): void
+    {
+        $locator = new ResourceLocator($this->baseDir);
+        $result = $locator->locate('/./users');
+        $this->assertNotNull($result);
+        $this->assertSame('Index', $result[0]);
+        $this->assertSame(['Users'], $result[4]);
+    }
+
+    public function testTraversalSegmentCannotEscapeBaseDir(): void
+    {
+        $locator = new ResourceLocator($this->baseDir);
+        // '..' is dropped, so /../users resolves inside the base dir like /users
+        $result = $locator->locate('/../users');
+        $this->assertNotNull($result);
+        $this->assertSame('Index', $result[0]);
+        $this->assertSame(['Users'], $result[4]);
+        $this->assertStringStartsWith($this->baseDir, $result[1]);
+    }
+
+    public function testTraversalOnlyPathResolvesToRoot(): void
+    {
+        $locator = new ResourceLocator($this->baseDir);
+        // all dot segments dropped → empty path → root Index
+        $result = $locator->locate('/../..');
+        $this->assertNotNull($result);
+        $this->assertSame('Index', $result[0]);
+        $this->assertStringStartsWith($this->baseDir, $result[1]);
+    }
 }

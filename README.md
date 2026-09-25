@@ -184,7 +184,7 @@ After the path is fully traversed, resource files are looked up in the following
 
 Finally, the located resource serves the request through the template method `handle()` (`before` → HTTP method → `after`), so **hooks run consistently** whether or not extra path segments matched. A catch-all resource receives any unmatched remaining segments via `$this->remaining`.
 
-URL segments are automatically converted to StudlyCase to match directory names (`/users` → `Users`, `/blog_posts` → `BlogPosts`).
+URL segments are automatically converted to StudlyCase to match directory names (`/users` → `Users`, `/blog_posts` → `BlogPosts`). `.` / `..` segments are ignored, so the locator can never escape the resource root; `baseDir` must be an existing directory or an `InvalidArgumentException` is thrown.
 
 ## API Reference
 
@@ -437,7 +437,7 @@ $rest->set(RedisCache::class, fn() => new RedisCache(new Redis(), 'localhost', 6
 
 最终，定位到的资源统一通过模板方法 `handle()`（`before` → HTTP 方法 → `after`）处理请求，因此**无论是否有多余路径段，前置/后置钩子行为一致**。兜底资源可通过 `$this->remaining` 拿到未匹配的剩余路径段。
 
-URL 段会自动转 StudlyCase 匹配目录名（`/users` → `Users`，`/blog_posts` → `BlogPosts`）。
+URL 段会自动转 StudlyCase 匹配目录名（`/users` → `Users`，`/blog_posts` → `BlogPosts`）。路径中的 `.` / `..` 段会被忽略，定位器永远不会逃出资源根目录；`baseDir` 必须是已存在的目录，否则抛出 `InvalidArgumentException`。
 
 ## API 参考
 

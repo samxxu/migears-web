@@ -19,7 +19,11 @@ class ResourceLocator
 {
     public function __construct(
         private readonly string $baseDir,
-    ) {}
+    ) {
+        if ($baseDir === '' || !is_dir($baseDir)) {
+            throw new \InvalidArgumentException("Resource base directory must be an existing directory: $baseDir");
+        }
+    }
 
     /**
      * Locate a resource.
@@ -93,11 +97,22 @@ class ResourceLocator
 
     /**
      * Parse a path into a segment array.
+     * Dot segments ('.', '..') are dropped so the locator can never
+     * escape the resource base directory.
      */
     private function parsePath(string $path): array
     {
         $path = trim($path, '/');
-        return $path === '' ? [] : explode('/', $path);
+        if ($path === '') {
+            return [];
+        }
+        $segments = [];
+        foreach (explode('/', $path) as $segment) {
+            if (trim($segment, " .") !== '') {
+                $segments[] = $segment;
+            }
+        }
+        return $segments;
     }
 
     /**

@@ -30,6 +30,30 @@ class MiRestTest extends TestCase
         $this->assertSame('Hello from root', $data['message']);
     }
 
+    public function testEmptyBaseDirThrows(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        new MiRest('');
+    }
+
+    public function testTraversalRequestIsNotFound(): void
+    {
+        $rest = new MiRest($this->baseDir, $this->namespace);
+        // '..' is dropped, 'secret' has no resource inside the base dir → 404
+        $response = $rest->handle(new Request('GET', '/../secret'));
+        $this->assertSame(404, $response->status);
+    }
+
+    public function testTraversalRequestResolvesInsideBaseDir(): void
+    {
+        $rest = new MiRest($this->baseDir, $this->namespace);
+        // '..' is dropped, so the request hits Users/Index inside the base dir
+        $response = $rest->handle(new Request('GET', '/../users'));
+        $this->assertSame(200, $response->status);
+        $data = json_decode($response->body, true);
+        $this->assertArrayHasKey('users', $data);
+    }
+
     public function testPostRoot(): void
     {
         $rest = new MiRest($this->baseDir, $this->namespace);
