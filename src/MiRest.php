@@ -28,7 +28,7 @@ use Psr\Log\NullLogger;
  */
 class MiRest implements ContainerInterface
 {
-    public const VERSION = '2.0.0';
+    public const VERSION = '2.0.1';
 
     private ResourceLocator $locator;
     private LoggerInterface $logger;

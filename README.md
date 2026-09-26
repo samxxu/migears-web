@@ -1,6 +1,6 @@
 # migears/web
 
-![Version](https://img.shields.io/badge/version-2.0.0-blue)
+![Version](https://img.shields.io/badge/version-2.0.1-blue)
 
 A minimalist REST framework with directory-as-routing. Zero magic, zero global variables, core code under 600 lines.
 
@@ -261,7 +261,7 @@ MIT
 
 # migears/web
 
-![Version](https://img.shields.io/badge/version-2.0.0-blue)
+![Version](https://img.shields.io/badge/version-2.0.1-blue)
 
 极简 REST 框架，目录即路由。零魔法、零全局变量，核心代码不到 600 行。
 
