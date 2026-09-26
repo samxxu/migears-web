@@ -64,10 +64,49 @@ class ResponseTest extends TestCase
         $this->assertSame(201, $response->status);
     }
 
-    public function testReadonlyProperties(): void
+    public function testPropertiesAreMutable(): void
     {
         $response = new Response();
-        $this->expectException(\Error::class);
-        $response->status = 500;
+        $response->status = 201;
+        $response->body = 'hello';
+        $response->headers = ['X-Custom' => 'yes'];
+        $this->assertSame(201, $response->status);
+        $this->assertSame('hello', $response->body);
+        $this->assertSame('yes', $response->headers['X-Custom']);
+    }
+
+    public function testWithHeaderSetsHeaderAndReturnsSelf(): void
+    {
+        $response = Response::json(['ok' => true]);
+        $result = $response->withHeader('X-Powered-By', 'migears');
+        $this->assertSame($response, $result);
+        $this->assertSame('migears', $response->headers['X-Powered-By']);
+    }
+
+    public function testWithHeaderOverwritesExistingHeader(): void
+    {
+        $response = Response::json(['ok' => true]);
+        $response->withHeader('Content-Type', 'text/plain');
+        $this->assertSame('text/plain', $response->headers['Content-Type']);
+    }
+
+    public function testWithStatusSetsStatusAndReturnsSelf(): void
+    {
+        $response = Response::json(['ok' => true]);
+        $result = $response->withStatus(418);
+        $this->assertSame($response, $result);
+        $this->assertSame(418, $response->status);
+    }
+
+    public function testFluentChaining(): void
+    {
+        $response = Response::json(['ok' => true])
+            ->withStatus(201)
+            ->withHeader('X-Request-Id', 'abc123')
+            ->withHeader('X-Custom', 'value');
+        $this->assertSame(201, $response->status);
+        $this->assertSame('abc123', $response->headers['X-Request-Id']);
+        $this->assertSame('value', $response->headers['X-Custom']);
+        $this->assertSame('{"ok":true}', $response->body);
     }
 }

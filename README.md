@@ -177,6 +177,8 @@ $rest->set(RedisCache::class, fn() => new RedisCache(new Redis(), 'localhost', 6
 **Rule of thumb**: needs configuration → register via `set()`.
 Needs nothing → just `new`. Either way your code never depends on container magic.
 
+> **Note on the `namespace` parameter**: Each resource file declares a class (usually `Index` or `CatchAllResource`). If `namespace` is empty, all resource classes live in the global scope and will collide as soon as you have more than one resource — you will get a *"Cannot redeclare class"* fatal error. Always set a namespace for any project with more than one resource file.
+
 ## Routing Rules
 
 For a request path `/foo/bar/baz`, the locator descends level by level:
@@ -447,6 +449,8 @@ $rest->set(RedisCache::class, fn() => new RedisCache(new Redis(), 'localhost', 6
 ```
 
 **经验法则**：需要配置 → 用 `set()` 注册。不需要配置 → 直接 `new`。无论哪种方式，你的业务代码都不依赖容器的任何魔法。
+
+> **关于 `namespace` 参数**：每个资源文件都声明了一个类（通常是 `Index` 或 `CatchAllResource`）。如果 `namespace` 为空，所有资源类都在全局作用域，一旦有两个以上资源就会类名冲突，报 *"Cannot redeclare class"* 致命错误。任何有多个资源文件的项目都应设置 namespace。
 
 ## 路由规则
 

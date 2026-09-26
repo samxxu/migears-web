@@ -36,6 +36,25 @@ class MiRestTest extends TestCase
         new MiRest('');
     }
 
+    public function testNoNamespaceWorksWithSingleResource(): void
+    {
+        // A single resource file with no namespace works fine.
+        // With multiple resources, class names collide (documented in README).
+        $dir = sys_get_temp_dir() . '/migears-test-nons-' . uniqid();
+        mkdir($dir, 0777, true);
+        file_put_contents($dir . '/Index.php', '<?php use MiGears\Web\AbstractResource; use MiGears\Web\Request; use MiGears\Web\Response; class Index extends AbstractResource { public function GET(Request $r): Response { return Response::json(["ok"=>true]); } }');
+        try {
+            $rest = new MiRest($dir, '');
+            $response = $rest->handle(new Request('GET', '/'));
+            $this->assertSame(200, $response->status);
+            $data = json_decode($response->body, true);
+            $this->assertTrue($data['ok']);
+        } finally {
+            unlink($dir . '/Index.php');
+            rmdir($dir);
+        }
+    }
+
     public function testTraversalRequestIsNotFound(): void
     {
         $rest = new MiRest($this->baseDir, $this->namespace);

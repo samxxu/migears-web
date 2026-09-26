@@ -6,17 +6,20 @@ namespace MiGears\Web;
 /**
  * Lightweight HTTP request object.
  * Encapsulates request data to avoid direct use of superglobals and facilitates unit testing.
+ *
+ * Properties are publicly mutable for extension — subclasses and middleware
+ * can decorate the request (e.g. add parsed attributes, normalized headers).
  */
 final class Request
 {
     public function __construct(
-        public readonly string $method,
-        public readonly string $path,
-        public readonly array $query = [],
-        public readonly array $body = [],
-        public readonly array $headers = [],
-        public readonly array $server = [],
-        public readonly array $files = [],
+        public string $method,
+        public string $path,
+        public array $query = [],
+        public array $body = [],
+        public array $headers = [],
+        public array $server = [],
+        public array $files = [],
     ) {}
 
     /**

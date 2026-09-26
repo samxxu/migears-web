@@ -6,13 +6,16 @@ namespace MiGears\Web;
 /**
  * Lightweight HTTP response object.
  * Resource methods return a Response, which is sent uniformly by the framework to avoid direct output.
+ *
+ * Properties are publicly mutable for extension — subclasses can add helpers,
+ * and callers can chain withHeader() / withStatus() to build up the response.
  */
 final class Response
 {
     public function __construct(
-        public readonly string $body = '',
-        public readonly int $status = 200,
-        public readonly array $headers = [],
+        public string $body = '',
+        public int $status = 200,
+        public array $headers = [],
     ) {}
 
     /**
@@ -53,6 +56,24 @@ final class Response
     public static function empty(int $status = 204): self
     {
         return new self(status: $status);
+    }
+
+    /**
+     * Set a response header. Returns $this for chaining.
+     */
+    public function withHeader(string $name, string $value): self
+    {
+        $this->headers[$name] = $value;
+        return $this;
+    }
+
+    /**
+     * Set the HTTP status code. Returns $this for chaining.
+     */
+    public function withStatus(int $status): self
+    {
+        $this->status = $status;
+        return $this;
     }
 
     /**

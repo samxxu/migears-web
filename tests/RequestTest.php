@@ -56,11 +56,19 @@ class RequestTest extends TestCase
         $this->assertSame('fallback', $request->header('X-Missing', 'fallback'));
     }
 
-    public function testReadonlyProperties(): void
+    public function testPropertiesAreMutable(): void
     {
         $request = new Request('GET', '/');
-        $this->expectException(\Error::class);
         $request->method = 'POST';
+        $request->path = '/new-path';
+        $request->query = ['page' => '2'];
+        $request->body = ['key' => 'val'];
+        $request->headers = ['x-custom' => 'yes'];
+        $this->assertSame('POST', $request->method);
+        $this->assertSame('/new-path', $request->path);
+        $this->assertSame(['page' => '2'], $request->query);
+        $this->assertSame(['key' => 'val'], $request->body);
+        $this->assertSame('yes', $request->header('X-Custom'));
     }
 
     // --- parseBody ---
