@@ -2,7 +2,7 @@
 
 ![Version](https://img.shields.io/badge/version-2.0.1-blue)
 
-A minimalist REST framework with directory-as-routing. Zero magic, zero global variables, core code under 800 lines.
+A minimalist REST framework with directory-as-routing. Zero magic, zero global variables, core code under 500 lines.
 
 > **Background**: miGears is the open-source successor of **TinyGears**, a
 > self-developed PHP framework. It was renamed and open-sourced recently because
@@ -14,7 +14,7 @@ A minimalist REST framework with directory-as-routing. Zero magic, zero global v
 - **Lightweight Request/Response** — Custom objects, simpler and more intuitive than PSR-7
 - **PSR-3 / PSR-4 / PSR-11 / PSR-12** — Follows logging, autoloading, container, and coding standards
 - **Minimal dependencies** — Only `psr/container` and `psr/log`
-- **Under 800 lines** — Read the entire framework in one sitting
+- **Under 500 lines of code** — Comments and blank lines excluded, so it stays true as the documentation grows; read the entire framework in one sitting
 - **No global variables, no singletons** — Fully testable and injectable
 - **Built-in container, PSR-11** — Register only what needs configuration (PDO, Redis, Logger, DAOs, Managers); everything else is just `new`
 - **`before()` / `after()` hooks** — Lightweight middleware alternative
@@ -269,7 +269,7 @@ MIT
 
 ![Version](https://img.shields.io/badge/version-2.0.1-blue)
 
-极简 REST 框架，目录即路由。零魔法、零全局变量，核心代码不到 800 行。
+极简 REST 框架，目录即路由。零魔法、零全局变量，核心代码不到 500 行。
 
 > **背景**：miGears 源自自研 PHP 框架 **TinyGears**，因 TinyGears 这一名字
 > 已被开源社区占用，故近期更名并开源发布。
@@ -280,7 +280,7 @@ MIT
 - **轻量 Request/Response** — 自定义对象，比 PSR-7 更简洁直观
 - **PSR-3 / PSR-4 / PSR-11 / PSR-12** — 遵循日志、自动加载、容器、编码规范
 - **依赖极少** — 仅 `psr/container` 与 `psr/log`
-- **不到 800 行** — 一口气读完整个框架
+- **代码不到 500 行** — 不计注释与空行，因此文档怎么长都不会让这句话失真；一口气读完整个框架
 - **无全局变量、无单例** — 完全可测试、可注入
 - **内置容器，PSR-11** — 只注册需要配置的部分（PDO、Redis、Logger、DAO、Manager），其他直接 `new`
 - **`before()` / `after()` 钩子** — 轻量级中间件替代方案
