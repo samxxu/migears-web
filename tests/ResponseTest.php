@@ -30,6 +30,32 @@ class ResponseTest extends TestCase
         $this->assertSame(404, $response->status);
     }
 
+    public function testJsonGracefullyHandlesEncodeFailure(): void
+    {
+        // NAN cannot be JSON-encoded — json_encode returns false.
+        // Response::json degrades to 500 with a JSON error body.
+        $response = Response::json(['value' => NAN]);
+        $this->assertSame(500, $response->status);
+        $this->assertSame('application/json; charset=utf-8', $response->headers['Content-Type']);
+        $data = json_decode($response->body, true);
+        $this->assertIsArray($data);
+        $this->assertSame('json_encode failed', $data['error']);
+        $this->assertArrayHasKey('code', $data);
+        $this->assertArrayHasKey('message', $data);
+    }
+
+    public function testJsonHandlesResourceWithoutTypeError(): void
+    {
+        $fh = fopen('php://memory', 'r');
+        try {
+            $response = Response::json(['fh' => $fh]);
+            $data = json_decode($response->body, true);
+            $this->assertSame('json_encode failed', $data['error']);
+        } finally {
+            fclose($fh);
+        }
+    }
+
     public function testHtmlResponse(): void
     {
         $response = Response::html('<p>Hello</p>');

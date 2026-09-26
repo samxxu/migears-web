@@ -20,11 +20,25 @@ final class Response
 
     /**
      * Return a JSON response.
+     *
+     * If json_encode fails (e.g. NAN, INF, resources, depth limit), the
+     * response status is 500 and the body contains a JSON-encodable error
+     * description — the framework degrades gracefully instead of throwing a
+     * TypeError.
      */
     public static function json(mixed $data, int $status = 200): self
     {
+        $body = json_encode($data, JSON_UNESCAPED_UNICODE);
+        if ($body === false) {
+            $status = 500;
+            $body = json_encode([
+                'error' => 'json_encode failed',
+                'code' => json_last_error(),
+                'message' => json_last_error_msg(),
+            ], JSON_UNESCAPED_UNICODE);
+        }
         return new self(
-            body: json_encode($data, JSON_UNESCAPED_UNICODE),
+            body: $body,
             status: $status,
             headers: ['Content-Type' => 'application/json; charset=utf-8'],
         );
