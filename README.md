@@ -2,7 +2,7 @@
 
 ![Version](https://img.shields.io/badge/version-2.0.1-blue)
 
-A minimalist REST framework with directory-as-routing. Zero magic, zero global variables, core code under 600 lines.
+A minimalist REST framework with directory-as-routing. Zero magic, zero global variables, core code under 800 lines.
 
 > **Background**: miGears is the open-source successor of **TinyGears**, a
 > self-developed PHP framework. It was renamed and open-sourced recently because
@@ -12,9 +12,9 @@ A minimalist REST framework with directory-as-routing. Zero magic, zero global v
 
 - **Directory-as-routing** — The filesystem structure is your API, no routing table configuration needed
 - **Lightweight Request/Response** — Custom objects, simpler and more intuitive than PSR-7
-- **PSR-3 / PSR-4 / PSR-12** — Follows logging, autoloading, and coding standards
-- **Minimal dependencies** — Only depends on `psr/log`
-- **Under 600 lines** — Read the entire framework in one sitting
+- **PSR-3 / PSR-4 / PSR-11 / PSR-12** — Follows logging, autoloading, container, and coding standards
+- **Minimal dependencies** — Only `psr/container` and `psr/log`
+- **Under 800 lines** — Read the entire framework in one sitting
 - **No global variables, no singletons** — Fully testable and injectable
 - **Built-in container, PSR-11** — Register only what needs configuration (PDO, Redis, Logger, DAOs, Managers); everything else is just `new`
 - **`before()` / `after()` hooks** — Lightweight middleware alternative
@@ -25,6 +25,8 @@ A minimalist REST framework with directory-as-routing. Zero magic, zero global v
 ```bash
 composer require migears/web
 ```
+
+Requires: PHP 8.1+, `psr/container`, `psr/log`.
 
 ## Quick Start
 
@@ -190,6 +192,8 @@ After the path is fully traversed, resource files are looked up in the following
 
 Finally, the located resource serves the request through the template method `handle()` (`before` → HTTP method → `after`), so **hooks run consistently** whether or not extra path segments matched. A catch-all resource receives any unmatched remaining segments via `$this->remaining`.
 
+Once located, the HTTP verb decides what runs: the handler the resource declares, or `405 Method Not Allowed` when it declares none. The default `OPTIONS()` reports what the resource supports through an `Allow` header.
+
 URL segments are automatically converted to StudlyCase to match directory names (`/users` → `Users`, `/blog_posts` → `BlogPosts`). `.` / `..` segments are ignored, so the locator can never escape the resource root; `baseDir` must be an existing directory or an `InvalidArgumentException` is thrown.
 
 ## API Reference
@@ -244,7 +248,9 @@ $response->send(): void
 
 | Method | Description |
 |--------|-------------|
-| `GET() / POST() / PUT() / DELETE()` | HTTP method handlers (override in subclasses) |
+| `GET() / POST() / PUT() / DELETE() / PATCH()` | HTTP method handlers (override in subclasses). A method you do not override answers `405 Method Not Allowed` |
+| `OPTIONS()` | Answers `204` with an `Allow` header listing what the resource supports (always `OPTIONS` and `HEAD`, plus whichever of the five above the subclass declares — detected by reflection, so simply declaring `POST()` is enough) |
+| `HEAD()` | `GET()` without a body |
 | `before(Request): ?Response` | Before hook, short-circuits if a response is returned |
 | `after(Request, Response): Response` | After hook, modifies and returns the response |
 | `param(string $name, mixed $default = null): mixed` | Get a named route parameter |
@@ -263,7 +269,7 @@ MIT
 
 ![Version](https://img.shields.io/badge/version-2.0.1-blue)
 
-极简 REST 框架，目录即路由。零魔法、零全局变量，核心代码不到 600 行。
+极简 REST 框架，目录即路由。零魔法、零全局变量，核心代码不到 800 行。
 
 > **背景**：miGears 源自自研 PHP 框架 **TinyGears**，因 TinyGears 这一名字
 > 已被开源社区占用，故近期更名并开源发布。
@@ -272,9 +278,9 @@ MIT
 
 - **目录即路由** — 文件系统结构就是你的 API，无需配置路由表
 - **轻量 Request/Response** — 自定义对象，比 PSR-7 更简洁直观
-- **PSR-3 / PSR-4 / PSR-12** — 遵循日志、自动加载、编码规范
-- **依赖极少** — 仅依赖 `psr/log`
-- **不到 600 行** — 一口气读完整个框架
+- **PSR-3 / PSR-4 / PSR-11 / PSR-12** — 遵循日志、自动加载、容器、编码规范
+- **依赖极少** — 仅 `psr/container` 与 `psr/log`
+- **不到 800 行** — 一口气读完整个框架
 - **无全局变量、无单例** — 完全可测试、可注入
 - **内置容器，PSR-11** — 只注册需要配置的部分（PDO、Redis、Logger、DAO、Manager），其他直接 `new`
 - **`before()` / `after()` 钩子** — 轻量级中间件替代方案
@@ -285,6 +291,8 @@ MIT
 ```bash
 composer require migears/web
 ```
+
+要求：PHP 8.1+，`psr/container`，`psr/log`。
 
 ## 快速开始
 
@@ -455,6 +463,8 @@ $rest->set(RedisCache::class, fn() => new RedisCache(new Redis(), 'localhost', 6
 
 最终，定位到的资源统一通过模板方法 `handle()`（`before` → HTTP 方法 → `after`）处理请求，因此**无论是否有多余路径段，前置/后置钩子行为一致**。兜底资源可通过 `$this->remaining` 拿到未匹配的剩余路径段。
 
+定位到资源之后，由 HTTP 动词决定执行什么：资源声明了就执行对应处理器，没声明则返回 `405 Method Not Allowed`；默认的 `OPTIONS()` 会通过 `Allow` 头报告该资源支持哪些方法。
+
 URL 段会自动转 StudlyCase 匹配目录名（`/users` → `Users`，`/blog_posts` → `BlogPosts`）。路径中的 `.` / `..` 段会被忽略，定位器永远不会逃出资源根目录；`baseDir` 必须是已存在的目录，否则抛出 `InvalidArgumentException`。
 
 ## API 参考
@@ -509,7 +519,9 @@ $response->send(): void
 
 | 方法 | 说明 |
 |------|------|
-| `GET() / POST() / PUT() / DELETE()` | HTTP 方法处理器（子类重写） |
+| `GET() / POST() / PUT() / DELETE() / PATCH()` | HTTP 方法处理器（子类重写）。未重写的方法一律返回 `405 Method Not Allowed` |
+| `OPTIONS()` | 返回 `204` 并带 `Allow` 头，列出该资源支持的方法（始终含 `OPTIONS` 与 `HEAD`，再加上子类声明的那几个 —— 通过反射探测，所以只要声明 `POST()` 就会出现） |
+| `HEAD()` | 与 `GET()` 相同但不返回响应体 |
 | `before(Request): ?Response` | 前置钩子，返回响应则短路 |
 | `after(Request, Response): Response` | 后置钩子，修改并返回响应 |
 | `param(string $name, mixed $default = null): mixed` | 获取命名路由参数 |
