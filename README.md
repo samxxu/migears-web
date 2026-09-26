@@ -16,7 +16,7 @@ A minimalist REST framework with directory-as-routing. Zero magic, zero global v
 - **Minimal dependencies** — Only depends on `psr/log`
 - **Under 600 lines** — Read the entire framework in one sitting
 - **No global variables, no singletons** — Fully testable and injectable
-- **Built-in DI container** — Register only what needs configuration (PDO, Redis, Logger); everything else is just `new`
+- **Built-in container, PSR-11** — Register only what needs configuration (PDO, Redis, Logger, DAOs, Managers); everything else is just `new`
 - **`before()` / `after()` hooks** — Lightweight middleware alternative
 - **`___param___` wildcard directories** — Capture URL segments as named parameters
 
@@ -104,16 +104,16 @@ $response = $rest->handle(Request::fromGlobals());
 $response->send();
 ```
 
-## Dependency Injection (DI) Container
+## Container
 
-MiRest ships with a tiny built-in DI container for wiring **only the services that need configuration** (PDO, Redis, Logger, ...). Everything that doesn't need setup is just `new` — no container involved. This keeps the framework free of magic while staying fully injectable and testable.
+MiRest **is** the container: register only what needs configuration (PDO, Redis, Logger, a DAO, a Manager); everything that merely needs `new` is constructed in place. It is a **PSR-11** container — `Psr\Container\ContainerInterface` — so anything that speaks PSR-11 reaches it without a bespoke interface, and this package does not have to depend on the package that consumes it.
 
 ### Design philosophy
 
-- **Register only what needs configuration** — the container exists for objects with setup (DSNs, hosts, credentials). Pure value objects (Request, Response, Form, Str, ...) are simply `new`'d in place.
-- **Closure-based, lazy factories** — each service is a factory closure. It is **not** executed until first requested, and its result is cached.
-- **Singleton by default** — every service resolves to one shared instance for the lifetime of the `MiRest` object.
-- **Opt-in, no auto-wiring** — there is no reflection and no magical resolution; a service must be registered explicitly to be used. Explicit beats magical: this keeps the whole container under ~30 lines and instantly readable.
+- **Register only what needs configuration** — the container exists for objects with setup (DSNs, hosts, credentials). Pure value objects (Request, Response, Domains, ...) are simply `new`'d in place.
+- **Closure-based, lazy factories** — each entry is a factory closure. It is **not** executed until first requested, and its result is cached.
+- **One instance per entry** — every entry resolves to one shared instance for the lifetime of the `MiRest` object.
+- **Opt-in, no auto-wiring** — there is no reflection and no magical resolution; an entry must be registered explicitly to be used. Explicit beats magical: this keeps the whole container under ~40 lines and instantly readable.
 - **No globals, no static** — the container lives on the `MiRest` instance and is handed to every resource.
 
 ### The whole API: three methods
@@ -121,40 +121,46 @@ MiRest ships with a tiny built-in DI container for wiring **only the services th
 ```php
 $rest->set(string $id, callable $factory): self   // Register a factory (lazy)
 $rest->has(string $id): bool                       // Registered (factory pending or resolved)?
-$rest->service(string $id): mixed                   // Resolve the instance (cached for reuse)
+$rest->get(string $id): mixed                      // Resolve the instance (cached for reuse)
 ```
 
-`$id` is either a class name (`PDO::class`) or any custom string (`'logger'`), so interfaces and friendly aliases work naturally.
+`$id` is either a class name (`PDO::class`) or any custom string (`'config'`), so interfaces and friendly aliases work naturally. `has()` and `get()` are PSR-11; `set()` is MiRest's own registration side.
 
 **Lazy-singleton flow**:
 
 ```php
 $rest->set(PDO::class, fn() => new PDO('mysql:host=localhost;dbname=app', 'user', 'pass'));
 
-$rest->has(PDO::class);      // true — factory registered (not yet resolved)
-$rest->service(PDO::class);  // 1st call runs the factory, caches the result
-$rest->service(PDO::class);  // 2nd call returns the SAME cached instance
+$rest->has(PDO::class);   // true — factory registered (not yet resolved)
+$rest->get(PDO::class);   // 1st call runs the factory, caches the result
+$rest->get(PDO::class);   // 2nd call returns the SAME cached instance
 
-$pdo = $rest->service('missing'); // null — not registered (no exception)
+$rest->get('missing');    // throws NotFoundException — an unregistered id is an assembly mistake
 ```
 
-Re-registering with `set()` replaces the factory **and drops the cached instance**, so the next `service()` call builds a fresh object — handy for redeploy/rebuild or tests.
+`get()` throwing is PSR-11's requirement rather than a style choice: a typo or a forgotten registration must fail where it is asked for, instead of surfacing later as a `null` that "is not an object". Probing for something optional is what `has()` is for. `NotFoundException` is also a `RuntimeException`, and it is not `ResourceNotFoundException` — that one means "no resource matched this path" (a 404), this one means "the application was not wired correctly" (a 500).
 
-### Using services inside resources
+Re-registering with `set()` replaces the factory **and drops the cached instance**, so the next `get()` builds a fresh object — handy for redeploy/rebuild or tests.
 
-Each resource receives the container (via its `MiRest` instance) and resolves services through `$this->service()`:
+### Using the container inside resources
+
+Each resource receives the container (its `MiRest` instance) and resolves entries through `$this->resolve()`:
 
 ```php
 class Users extends AbstractResource
 {
     public function GET(Request $request): Response
     {
-        $pdo = $this->service(PDO::class);   // shared PDO from the container
-        $dao = new UserDao($pdo);             // plain `new` — no container needed
+        $pdo    = $this->resolve(PDO::class);              // shared PDO from the container
+        $logger = $this->resolve(LoggerInterface::class);  // and the shared logger
+        $dao    = new UserDao($pdo, $logger);              // plain `new` — no container needed
+
         return Response::json($dao->getAll());
     }
 }
 ```
+
+The accessor is named `resolve()` rather than `get()` on purpose: PHP method names are case-insensitive, so a `get()` here would collide with the HTTP `GET()` verb.
 
 Typical bootstrap wiring:
 
@@ -201,9 +207,9 @@ $rest->before(callable $handler): self      // Global before hook
 $rest->after(callable $handler): self       // Global after hook
 $rest->notFound(callable $handler): self    // Custom 404 handler
 $rest->error(callable $handler): self       // Custom exception handler
-$rest->set(string $id, callable $factory): self    // Register service
-$rest->has(string $id): bool                       // Check service exists
-$rest->service(string $id): mixed                   // Get service (singleton)
+$rest->set(string $id, callable $factory): self    // Register an entry (lazy)
+$rest->has(string $id): bool                       // Is it registered?
+$rest->get(string $id): mixed                      // Resolve the instance (cached)
 ```
 
 ### Request
@@ -242,7 +248,7 @@ $response->send(): void
 | `before(Request): ?Response` | Before hook, short-circuits if a response is returned |
 | `after(Request, Response): Response` | After hook, modifies and returns the response |
 | `param(string $name, mixed $default = null): mixed` | Get a named route parameter |
-| `service(string $id): mixed` | Get a registered service (PDO, Logger, etc.) |
+| `resolve(string $id): mixed` | Resolve a registered entry (PDO, Logger, a Manager, ...) |
 | `assertInt(mixed, string): int` | Validate as integer, throws 404 on failure |
 | `$this->params` | All named parameters array |
 | `$this->remaining` | Remaining path segments (only for catch-all resources) |
@@ -270,7 +276,7 @@ MIT
 - **依赖极少** — 仅依赖 `psr/log`
 - **不到 600 行** — 一口气读完整个框架
 - **无全局变量、无单例** — 完全可测试、可注入
-- **内置 DI 容器** — 只注册需要配置的部分（PDO、Redis、Logger），其他直接 `new`
+- **内置容器，PSR-11** — 只注册需要配置的部分（PDO、Redis、Logger、DAO、Manager），其他直接 `new`
 - **`before()` / `after()` 钩子** — 轻量级中间件替代方案
 - **`___param___` 通配符目录** — 捕获 URL 段作为命名参数
 
@@ -358,57 +364,69 @@ $response = $rest->handle(Request::fromGlobals());
 $response->send();
 ```
 
-## 依赖注入（DI）容器
+## 容器
 
-MiRest 内置一个极简 DI 容器，只用于装配**需要配置的服务**（PDO、Redis、Logger 等）。不需要配置的，直接用 `new`，完全绕开容器。这样既保持框架零魔法，又做到完全可注入、可测试。
+MiRest **本身就是**容器：只注册需要配置的东西（PDO、Redis、Logger、DAO、Manager）；只需要 `new` 的东西就地构造。
+它是一个 **PSR-11** 容器 —— `Psr\Container\ContainerInterface` —— 所以任何会说 PSR-11 的代码都能取用它，
+不必为它另立接口，本包也无需依赖使用它的那个包。
 
 ### 设计哲学
 
-- **只注册需要配置的部分** — 容器存在的意义是有配置需求的对象（DSN、主机、账号密码）。纯粹的值对象（Request、Response、Form、Str 等）就地 `new` 即可。
-- **闭包工厂、懒加载** — 每个服务都是一个工厂闭包，**首次被请求时才执行**，结果会被缓存。
-- **默认单例** — 每个服务在 `MiRest` 对象生命周期内只解析出一个共享实例。
-- **显式登记，不做自动装配** — 没有反射、没有魔法解析；想用某个服务必须显式 `set()`。显式优于魔法：这让整个容器保持在 30 行以内，可一口气读懂。
+- **只注册需要配置的部分** — 容器存在的意义是有配置需求的对象（DSN、主机、账号密码）。纯粹的值对象（Request、Response、Domain 等）就地 `new` 即可。
+- **闭包工厂、懒加载** — 每个条目都是一个工厂闭包，**首次被请求时才执行**，结果会被缓存。
+- **一个条目一个实例** — 每个条目在 `MiRest` 对象生命周期内只解析出一个共享实例。
+- **显式登记，不做自动装配** — 没有反射、没有魔法解析；想用某个条目必须显式 `set()`。显式优于魔法：这让整个容器保持在 40 行以内，可一口气读懂。
 - **无全局、无静态** — 容器挂在 `MiRest` 实例上，随框架注入到每个资源。
 
 ### 全部 API 只有三个方法
 
 ```php
 $rest->set(string $id, callable $factory): self   // 注册工厂（懒加载）
-$rest->has(string $id): bool                       // 是否已注册（未解析工厂或已解析实例）
-$rest->service(string $id): mixed                   // 解析实例（缓存复用）
+$rest->has(string $id): bool                       // 是否已注册（工厂待执行或已解析）
+$rest->get(string $id): mixed                      // 解析实例（缓存复用）
 ```
 
-`$id` 可以是类名（`PDO::class`），也可以是任意字符串别名（`'logger'`），因此接口、友好别名都能自然使用。
+`$id` 可以是类名（`PDO::class`），也可以是任意字符串别名（`'config'`），因此接口、友好别名都能自然使用。
+`has()` 与 `get()` 是 PSR-11 的；`set()` 是 MiRest 自己的注册面。
 
 **懒加载单例的流程**：
 
 ```php
 $rest->set(PDO::class, fn() => new PDO('mysql:host=localhost;dbname=app', 'user', 'pass'));
 
-$rest->has(PDO::class);      // true — 工厂已注册（尚未解析）
-$rest->service(PDO::class);  // 第 1 次调用：执行工厂并缓存结果
-$rest->service(PDO::class);  // 第 2 次调用：返回同一个缓存实例
+$rest->has(PDO::class);   // true — 工厂已注册（尚未解析）
+$rest->get(PDO::class);   // 第 1 次调用：执行工厂并缓存结果
+$rest->get(PDO::class);   // 第 2 次调用：返回同一个缓存实例
 
-$pdo = $rest->service('missing'); // null — 未注册（不抛异常）
+$rest->get('missing');    // 抛 NotFoundException —— 未注册的 id 属于装配错误
 ```
 
-重新 `set()` 会替换工厂**并丢弃已缓存的实例**，下次 `service()` 会构建全新对象——适合重新部署或测试场景。
+`get()` 会抛不是风格选择，而是 PSR-11 的要求：拼错或漏注册必须在要它的地方失败，
+而不是过一阵子以「某个 `null` 不是对象」的形式冒出来。要探测可有可无的东西，用 `has()`。
+`NotFoundException` 同时也是 `RuntimeException`；它不是 `ResourceNotFoundException` ——
+后者是「没有资源匹配这个路径」（404），前者是「应用没装配对」（500）。
 
-### 在资源类内使用服务
+重新 `set()` 会替换工厂**并丢弃已缓存的实例**，下次 `get()` 会构建全新对象 —— 适合重新部署或测试场景。
 
-每个资源都会拿到（其所属 `MiRest` 的）容器，通过 `$this->service()` 解析服务：
+### 在资源类内使用容器
+
+每个资源都会拿到容器（其所属 `MiRest` 实例），通过 `$this->resolve()` 取条目：
 
 ```php
 class Users extends AbstractResource
 {
     public function GET(Request $request): Response
     {
-        $pdo = $this->service(PDO::class);   // 容器中的共享 PDO
-        $dao = new UserDao($pdo);             // 普通 `new` — 不需要容器
+        $pdo    = $this->resolve(PDO::class);              // 容器中的共享 PDO
+        $logger = $this->resolve(LoggerInterface::class);  // 以及共享 logger
+        $dao    = new UserDao($pdo, $logger);              // 普通 `new` —— 不需要容器
+
         return Response::json($dao->getAll());
     }
 }
 ```
+
+访问器叫 `resolve()` 而不是 `get()`，是刻意的：PHP 方法名不区分大小写，叫 `get()` 会与 HTTP 的 `GET()` 冲突。
 
 典型的启动装配：
 
@@ -454,9 +472,9 @@ $rest->before(callable $handler): self      // 全局前置钩子
 $rest->after(callable $handler): self       // 全局后置钩子
 $rest->notFound(callable $handler): self    // 自定义 404
 $rest->error(callable $handler): self       // 自定义异常处理
-$rest->set(string $id, callable $factory): self    // 注册服务
-$rest->has(string $id): bool                       // 检查服务是否存在
-$rest->service(string $id): mixed                   // 获取服务（单例）
+$rest->set(string $id, callable $factory): self    // 注册条目（懒加载）
+$rest->has(string $id): bool                       // 是否已注册
+$rest->get(string $id): mixed                      // 解析实例（缓存）
 ```
 
 ### Request
@@ -495,7 +513,7 @@ $response->send(): void
 | `before(Request): ?Response` | 前置钩子，返回响应则短路 |
 | `after(Request, Response): Response` | 后置钩子，修改并返回响应 |
 | `param(string $name, mixed $default = null): mixed` | 获取命名路由参数 |
-| `service(string $id): mixed` | 获取已注册服务（PDO、Logger 等） |
+| `resolve(string $id): mixed` | 解析已注册的条目（PDO、Logger、Manager 等） |
 | `assertInt(mixed, string): int` | 验证整数，失败抛 404 |
 | `$this->params` | 所有命名参数数组 |
 | `$this->remaining` | 剩余路径段（仅 catch-all 资源有值） |

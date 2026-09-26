@@ -10,8 +10,8 @@ namespace MiGears\Web;
  * (GET/POST/PUT/DELETE, etc., uppercase).
  * Methods accept a Request and return a Response.
  *
- * Service registry: use $this->service(PDO::class) to access registered services.
- * Only register things that need configuration (PDO, Redis, Logger, etc.).
+ * Container: use $this->resolve(PDO::class) to reach a registered entry.
+ * Only register things that need configuration (PDO, Redis, Logger, DAOs, ...).
  */
 abstract class AbstractResource
 {
@@ -61,15 +61,19 @@ abstract class AbstractResource
     }
 
     /**
-     * Get a registered service by ID (class name or custom string).
-     * Returns null if the service is not registered.
+     * Resolve a registered entry by ID (class name or custom string).
      *
-     * Only services registered via MiRest::set() are available.
-     * For things that don't need configuration, just use `new`.
+     * Named resolve() rather than get() on purpose: PHP method names are
+     * case-insensitive, so a get() here would collide with the HTTP GET() verb.
+     *
+     * Only ids registered via MiRest::set() are available; for things that need
+     * no configuration, just use `new`.
+     *
+     * @throws NotFoundException when nothing is registered under $id
      */
-    protected function service(string $id): mixed
+    protected function resolve(string $id): mixed
     {
-        return $this->rest->service($id);
+        return $this->rest->get($id);
     }
 
     /**

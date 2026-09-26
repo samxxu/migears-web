@@ -12,7 +12,9 @@ class Index extends AbstractResource
 {
     public function GET(Request $request): Response
     {
-        $config = $this->service('config');
+        // an unregistered id is an assembly mistake: resolve() throws rather than
+        // handing back null, so the failure happens here and not three calls later
+        $config = $this->resolve('config');
 
         return Response::json([
             'app_name' => $config['app_name'] ?? null,

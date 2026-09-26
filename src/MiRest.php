@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace MiGears\Web;
 
+use Psr\Container\ContainerInterface;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 
@@ -12,17 +13,20 @@ use Psr\Log\NullLogger;
  * Core feature: directory-as-route. No need to define a route table;
  * the filesystem is the route table.
  *
- * Built-in service registry: register only what needs configuration
- * (PDO, Redis, Logger, etc.). Everything else is just `new`.
+ * It is also the container: register only what needs configuration
+ * (PDO, Redis, Logger, each DAO, each Manager). Everything else is just `new`.
+ * The container speaks PSR-11 — `Psr\Container\ContainerInterface` — so a
+ * Manager or a resource reaches it without any bespoke interface, and this
+ * package and migears/manager stay independent of each other.
  *
  * Usage:
  *   $rest = new MiRest(__DIR__ . '/resources', 'App\\Resources');
  *   $rest->set(PDO::class, fn() => new PDO('mysql:host=localhost;dbname=app', 'user', 'pass'));
- *   $rest->set('logger', fn() => new Monolog\Logger('app'));
+ *   $rest->set(OrderManager::class, static fn() => new OrderManager($rest));
  *   $response = $rest->handle(Request::fromGlobals());
  *   $response->send();
  */
-class MiRest
+class MiRest implements ContainerInterface
 {
     public const VERSION = '2.0.0';
 
@@ -57,10 +61,10 @@ class MiRest
     }
 
     /**
-     * Register a service. Only for things that need configuration
-     * (PDO, Redis, Logger, etc.). Everything else: just `new`.
+     * Register an entry. Only for things that need configuration
+     * (PDO, Redis, Logger, a DAO, a Manager). Everything else: just `new`.
      *
-     * @param string $id Service ID (class name or custom string)
+     * @param string $id Entry ID (class name or custom string)
      * @param callable(): mixed $factory Factory that creates the instance
      */
     public function set(string $id, callable $factory): self
@@ -71,7 +75,7 @@ class MiRest
     }
 
     /**
-     * Check if a service is registered.
+     * Whether an id is registered (PSR-11).
      */
     public function has(string $id): bool
     {
@@ -79,16 +83,22 @@ class MiRest
     }
 
     /**
-     * Get a service instance (singleton). Returns null if not registered.
+     * The object registered under $id — the factory runs once, then the instance
+     * is cached (PSR-11).
+     *
+     * @throws NotFoundException when nothing is registered under $id. An
+     *                           unregistered id is an assembly mistake, and
+     *                           PSR-11 requires the failure to happen here
+     *                           rather than as a silent null further downstream
      */
-    public function service(string $id): mixed
+    public function get(string $id): mixed
     {
         if (isset($this->instances[$id])) {
             return $this->instances[$id];
         }
 
         if (!isset($this->factories[$id])) {
-            return null;
+            throw new NotFoundException("Nothing is registered under '{$id}'");
         }
 
         return $this->instances[$id] = ($this->factories[$id])();
