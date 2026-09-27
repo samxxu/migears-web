@@ -135,4 +135,34 @@ class ResponseTest extends TestCase
         $this->assertSame('value', $response->headers['X-Custom']);
         $this->assertSame('{"ok":true}', $response->body);
     }
+
+    public function testSendEchoesBody(): void
+    {
+        $response = new Response(body: 'hello world');
+        ob_start();
+        try {
+            $response->send();
+            $output = ob_get_clean();
+        } catch (\Throwable $e) {
+            ob_end_clean();
+            throw $e;
+        }
+        $this->assertSame('hello world', $output);
+    }
+
+    public function testSendReturnsVoid(): void
+    {
+        // send() has no return value — it just emits output.
+        // This test guards against accidental signature changes.
+        $response = new Response(body: 'x');
+        ob_start();
+        try {
+            $result = $response->send();
+            ob_end_clean();
+        } catch (\Throwable $e) {
+            ob_end_clean();
+            throw $e;
+        }
+        $this->assertNull($result);
+    }
 }

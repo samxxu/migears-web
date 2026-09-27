@@ -176,9 +176,9 @@ Typical bootstrap wiring:
 ```php
 $rest = new MiRest(baseDir: __DIR__ . '/resources', namespace: 'App\\Resources');
 
-$rest->set(PDO::class,         fn() => new PDO('mysql:host=localhost;dbname=app', 'user', 'pass'));
-$rest->set('logger',           fn() => new Monolog\Logger('app'));
-$rest->set(RedisCache::class, fn() => new RedisCache(new Redis()));
+$rest->set(PDO::class,                    fn() => new PDO('mysql:host=localhost;dbname=app', 'user', 'pass'));
+$rest->set(\Psr\Log\LoggerInterface::class, fn() => new Monolog\Logger('app'));
+$rest->set(RedisCache::class,            fn() => new RedisCache(new Redis()));
 ```
 
 **Rule of thumb**: needs configuration → register via `set()`.
@@ -201,9 +201,15 @@ After the path is fully traversed, resource files are looked up in the following
 
 Finally, the located resource serves the request through the template method `handle()` (`before` → HTTP method → `after`), so **hooks run consistently** whether or not extra path segments matched. A catch-all resource receives any unmatched remaining segments via `$this->remaining`.
 
-Once located, the HTTP verb decides what runs: the handler the resource declares, or `405 Method Not Allowed` when it declares none. A request whose verb is not an HTTP method gets the same 405 without ever reaching the class, so the resource's own helpers can never be invoked as handlers. The default `OPTIONS()` reports what the resource supports through an `Allow` header.
+> **Note on short-circuiting**: If the resource-level `before()` returns a `Response`, the request short-circuits — **neither the HTTP method nor the resource-level `after()` runs**. The global `after` hooks registered on `MiRest` still execute, because they wrap the entire dispatch.
+
+Once located, the HTTP verb decides what runs: the handler the resource declares, or `405 Method Not Allowed` when it declares none — the 405 response always carries an `Allow` header listing the supported methods (RFC 9110). A request whose verb is not an HTTP method gets the same 405 without ever reaching the class, so the resource's own helpers can never be invoked as handlers. The default `OPTIONS()` reports what the resource supports through an `Allow` header.
 
 URL segments are automatically converted to StudlyCase to match directory names (`/users` → `Users`, `/blog_posts` → `BlogPosts`). `.` / `..` segments are ignored, so the locator can never escape the resource root; `baseDir` must be an existing directory or an `InvalidArgumentException` is thrown.
+
+**Wildcard vs exact directories on the same level**: an exact directory (e.g. `Users/`) always takes priority over a wildcard directory (e.g. `___id___/`). If both exist at the same path depth, the exact match wins — the wildcard is never reached. This is intentional: explicit routes should not be shadowed by parameter captures.
+
+**Route parameters keep their raw URL encoding**: values captured from `___param___` directories are passed through as-is (e.g. `hello%20world` stays `hello%20world`). Use `urldecode($this->param('name'))` when you need the decoded value. This is intentional — keeping raw encoding provides an extra layer of protection against path-traversal variants like `%2e%2e`.
 
 ## API Reference
 
@@ -457,9 +463,9 @@ class Users extends AbstractResource
 ```php
 $rest = new MiRest(baseDir: __DIR__ . '/resources', namespace: 'App\\Resources');
 
-$rest->set(PDO::class,          fn() => new PDO('mysql:host=localhost;dbname=app', 'user', 'pass'));
-$rest->set('logger',            fn() => new Monolog\Logger('app'));
-$rest->set(RedisCache::class, fn() => new RedisCache(new Redis()));
+$rest->set(PDO::class,                    fn() => new PDO('mysql:host=localhost;dbname=app', 'user', 'pass'));
+$rest->set(\Psr\Log\LoggerInterface::class, fn() => new Monolog\Logger('app'));
+$rest->set(RedisCache::class,            fn() => new RedisCache(new Redis()));
 ```
 
 **经验法则**：需要配置 → 用 `set()` 注册。不需要配置 → 直接 `new`。无论哪种方式，你的业务代码都不依赖容器的任何魔法。
@@ -481,9 +487,15 @@ $rest->set(RedisCache::class, fn() => new RedisCache(new Redis()));
 
 最终，定位到的资源统一通过模板方法 `handle()`（`before` → HTTP 方法 → `after`）处理请求，因此**无论是否有多余路径段，前置/后置钩子行为一致**。兜底资源可通过 `$this->remaining` 拿到未匹配的剩余路径段。
 
-定位到资源之后，由 HTTP 动词决定执行什么：资源声明了就执行对应处理器，没声明则返回 `405 Method Not Allowed`。不是 HTTP 动词的请求同样得到 405，而且根本不会进入类内部，因此资源自己的辅助方法不可能被当成处理器调用；默认的 `OPTIONS()` 会通过 `Allow` 头报告该资源支持哪些方法。
+> **短路说明**：资源级 `before()` 返回 `Response` 时请求短路——**HTTP 方法和资源级 `after()` 都不会执行**。但注册在 `MiRest` 上的全局 `after` 钩子仍会执行（它们包裹整个分发过程）。
+
+定位到资源之后，由 HTTP 动词决定执行什么：资源声明了就执行对应处理器，没声明则返回 `405 Method Not Allowed`——405 响应始终携带列出支持方法的 `Allow` 头（RFC 9110）。不是 HTTP 动词的请求同样得到 405，而且根本不会进入类内部，因此资源自己的辅助方法不可能被当成处理器调用；默认的 `OPTIONS()` 会通过 `Allow` 头报告该资源支持哪些方法。
 
 URL 段会自动转 StudlyCase 匹配目录名（`/users` → `Users`，`/blog_posts` → `BlogPosts`）。路径中的 `.` / `..` 段会被忽略，定位器永远不会逃出资源根目录；`baseDir` 必须是已存在的目录，否则抛出 `InvalidArgumentException`。
+
+**同级精确目录与通配目录的优先级**：精确目录（如 `Users/`）始终优先于通配目录（如 `___id___/`）。若同一深度两者都存在，精确匹配胜出——通配目录永远不会被命中。这是有意设计的：显式路由不应被参数捕获所遮蔽。
+
+**路由参数保留原始 URL 编码**：从 `___param___` 目录捕获的值按原样传入（例如 `hello%20world` 保持 `hello%20world`）。需要解码时用 `urldecode($this->param('name'))` 即可。这是有意设计的——保留原始编码为 `%2e%2e` 这类路径穿越变体提供了额外的防护层。
 
 ## API 参考
 

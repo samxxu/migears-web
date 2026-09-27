@@ -165,6 +165,67 @@ class MiRestTest extends TestCase
         $this->assertSame('tokyo', $data['location']);
     }
 
+    public function testRouteParametersKeepTheirRawUrlEncoding(): void
+    {
+        // %20 is not decoded: the locator captures the segment as written. $_GET
+        // is decoded separately, so decoding the route value too would let a raw
+        // value such as '..' reach resource code, where it is often concatenated
+        // into a path (see README, "Route parameters keep their raw URL encoding").
+        $rest = new MiRest($this->baseDir, $this->namespace);
+        $response = $rest->handle(new Request('GET', '/users/42%20x'));
+        $this->assertSame(200, $response->status);
+        $data = json_decode($response->body, true);
+        $this->assertSame('42%20x', $data['id']);
+    }
+
+    public function testExactAndWildcardDirectoriesCannotSilentlyShareAClass(): void
+    {
+        // Users/UserId/ and Users/___user_id___/ both map to the same FQCN
+        // (...\Users\UserId\Index). Only one of the two files can ever be loaded,
+        // so once the exact one is in memory the wildcard request must not answer
+        // with the exact file's implementation as if nothing were wrong.
+        $suffix = uniqid('collision');
+        $ns = 'MiGears\\Web\\Tests\\' . $suffix;
+        $dir = sys_get_temp_dir() . '/migears-collision-' . $suffix;
+        mkdir($dir . '/Users/UserId', 0777, true);
+        mkdir($dir . '/Users/___user_id___', 0777, true);
+
+        $template = <<<'PHP'
+<?php
+namespace %s\Users\UserId;
+use MiGears\Web\AbstractResource;
+use MiGears\Web\Request;
+use MiGears\Web\Response;
+class Index extends AbstractResource {
+    public function GET(Request $r): Response { return Response::json(['from' => '%s']); }
+}
+PHP;
+        file_put_contents($dir . '/Users/UserId/Index.php', sprintf($template, $ns, 'exact'));
+        file_put_contents($dir . '/Users/___user_id___/Index.php', sprintf($template, $ns, 'wildcard'));
+
+        try {
+            $rest = new MiRest($dir, $ns);
+
+            // Exact directory: /users/user_id → Users/UserId (loads the class)
+            $exact = $rest->handle(new Request('GET', '/users/user_id'));
+            $this->assertSame(200, $exact->status);
+            $this->assertSame('exact', json_decode($exact->body, true)['from']);
+
+            // Wildcard directory: /users/999 → Users/___user_id___ (same FQCN).
+            // The ambiguous setup is reported, not resolved in silence.
+            $wildcard = $rest->handle(new Request('GET', '/users/999'));
+            $this->assertSame(500, $wildcard->status);
+            $this->assertNotSame('exact', json_decode($wildcard->body, true)['from'] ?? null);
+        } finally {
+            unlink($dir . '/Users/UserId/Index.php');
+            unlink($dir . '/Users/___user_id___/Index.php');
+            rmdir($dir . '/Users/UserId');
+            rmdir($dir . '/Users/___user_id___');
+            rmdir($dir . '/Users');
+            rmdir($dir);
+        }
+    }
+
     // --- Error handling tests ---
 
     public function testNotFound(): void
@@ -338,6 +399,35 @@ class MiRestTest extends TestCase
         $log = $logger->first();
         $this->assertSame('error', $log['level']);
         $this->assertSame('log test', $log['message']);
+    }
+
+    public function testLoggerRegisteredInContainerIsUsedByFramework(): void
+    {
+        // No explicit logger in constructor — framework should pick up
+        // LoggerInterface from the container (priority #2).
+        $logger = new ArrayLogger();
+        $rest = new MiRest($this->baseDir, $this->namespace);
+        $rest->set(\Psr\Log\LoggerInterface::class, fn() => $logger);
+
+        $rest->before(function () { throw new \RuntimeException('container-logger'); });
+        $rest->handle(new Request('GET', '/'));
+
+        $this->assertGreaterThan(0, $logger->count());
+        $this->assertSame('container-logger', $logger->first()['message']);
+    }
+
+    public function testExplicitLoggerTakesPriorityOverContainer(): void
+    {
+        $explicit = new ArrayLogger();
+        $container = new ArrayLogger();
+        $rest = new MiRest($this->baseDir, $this->namespace, $explicit);
+        $rest->set(\Psr\Log\LoggerInterface::class, fn() => $container);
+
+        $rest->before(function () { throw new \RuntimeException('priority-test'); });
+        $rest->handle(new Request('GET', '/'));
+
+        $this->assertGreaterThan(0, $explicit->count(), 'explicit logger must receive the error');
+        $this->assertSame(0, $container->count(), 'container logger must NOT be used when explicit logger is provided');
     }
 
     // --- CatchAll tests ---

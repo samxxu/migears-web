@@ -93,6 +93,23 @@ class ContainerTest extends TestCase
         $this->assertSame('miGears Demo', json_decode($response->body, true)['app_name']);
     }
 
+    public function testANullReturningFactoryIsStillASingleton(): void
+    {
+        $calls = 0;
+        $this->rest->set('nullable', function () use (&$calls) {
+            $calls++;
+            return null;
+        });
+
+        $first = $this->rest->get('nullable');
+        $second = $this->rest->get('nullable');
+
+        $this->assertNull($first);
+        $this->assertNull($second);
+        $this->assertSame(1, $calls, 'null factory must run only once (singleton semantics)');
+        $this->assertTrue($this->rest->has('nullable'), 'has() must return true for a registered null entry');
+    }
+
     public function testResolvingAnUnregisteredIdInsideAResourceSurfacesAsAnError(): void
     {
         // no 'config' registered: resolve() throws instead of handing back null,

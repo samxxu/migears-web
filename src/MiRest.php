@@ -31,7 +31,8 @@ class MiRest implements ContainerInterface
     public const VERSION = '2.0.1';
 
     private ResourceLocator $locator;
-    private LoggerInterface $logger;
+    private ?LoggerInterface $logger = null;
+    private ?LoggerInterface $explicitLogger = null;
 
     /** @var array<string, callable(): mixed> */
     private array $factories = [];
@@ -57,7 +58,35 @@ class MiRest implements ContainerInterface
         ?LoggerInterface $logger = null,
     ) {
         $this->locator = new ResourceLocator($baseDir);
-        $this->logger = $logger ?? new NullLogger();
+        $this->explicitLogger = $logger;
+    }
+
+    /**
+     * Resolve the logger to use for framework errors.
+     *
+     * Priority:
+     *   1. Explicit constructor argument
+     *   2. LoggerInterface registered in the container
+     *   3. NullLogger (silent fallback)
+     *
+     * Resolved lazily on first use so the container can be populated after
+     * the constructor.
+     */
+    private function getLogger(): LoggerInterface
+    {
+        if ($this->logger !== null) {
+            return $this->logger;
+        }
+
+        if ($this->explicitLogger !== null) {
+            return $this->logger = $this->explicitLogger;
+        }
+
+        try {
+            return $this->logger = $this->get(LoggerInterface::class);
+        } catch (NotFoundException $e) {
+            return $this->logger = new NullLogger();
+        }
     }
 
     /**
@@ -79,7 +108,7 @@ class MiRest implements ContainerInterface
      */
     public function has(string $id): bool
     {
-        return isset($this->factories[$id]) || isset($this->instances[$id]);
+        return isset($this->factories[$id]) || array_key_exists($id, $this->instances);
     }
 
     /**
@@ -93,7 +122,7 @@ class MiRest implements ContainerInterface
      */
     public function get(string $id): mixed
     {
-        if (isset($this->instances[$id])) {
+        if (array_key_exists($id, $this->instances)) {
             return $this->instances[$id];
         }
 
@@ -155,14 +184,14 @@ class MiRest implements ContainerInterface
         } catch (ResourceNotFoundException $e) {
             $response = $this->handleNotFound();
         } catch (\Throwable $e) {
-            $this->logger->error($e->getMessage(), ['exception' => $e]);
+            $this->getLogger()->error($e->getMessage(), ['exception' => $e]);
             $response = $this->handleError($e);
         }
 
         try {
             return $this->runAfter($request, $response);
         } catch (\Throwable $e) {
-            $this->logger->error('An after hook threw: ' . $e->getMessage(), ['exception' => $e]);
+            $this->getLogger()->error('An after hook threw: ' . $e->getMessage(), ['exception' => $e]);
 
             return $this->handleError($e);
         }
@@ -190,9 +219,7 @@ class MiRest implements ContainerInterface
 
         // Build fully qualified class name and load the file
         $className = $this->buildClassName($shortClassName, $namespaceSegments);
-        if (!class_exists($className, false)) {
-            require_once $filePath;
-        }
+        $this->loadResourceClass($className, $filePath);
 
         // Instantiate resource
         $resource = $this->createResource($className);
@@ -258,6 +285,34 @@ class MiRest implements ContainerInterface
         }
         $parts[] = $shortName;
         return implode('\\', $parts);
+    }
+
+    /**
+     * Load the resource class declared in the file the locator found.
+     *
+     * class_exists($name, false) alone only says that *some* file has already
+     * declared the class; it does not say the file we just located did. An exact
+     * directory and a wildcard directory on the same level can map to the same
+     * FQCN (e.g. `Users/UserId/` and `Users/___user_id___/` both produce
+     * `...\Users\UserId\Index`), and then the second request would silently reuse
+     * the first file's implementation. The loaded class must therefore come from
+     * $filePath; anything else is an ambiguous routing setup, and it is reported
+     * rather than papered over.
+     */
+    private function loadResourceClass(string $className, string $filePath): void
+    {
+        if (!class_exists($className, false)) {
+            require_once $filePath;
+            return;
+        }
+
+        $declaredIn = (new \ReflectionClass($className))->getFileName();
+        if ($declaredIn === false || realpath($declaredIn) !== realpath($filePath)) {
+            throw new \RuntimeException(
+                "Ambiguous resource: {$className} is declared in {$declaredIn} "
+                . "but {$filePath} was located; two resource files map to the same class name"
+            );
+        }
     }
 
     /**

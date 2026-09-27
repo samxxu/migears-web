@@ -124,12 +124,23 @@ abstract class AbstractResource
         }
 
         if (!in_array($method, self::HTTP_METHODS, true) || !method_exists($this, $method)) {
-            return Response::json(['error' => 'Method Not Allowed'], 405);
+            return $this->methodNotAllowed();
         }
 
         $response = $this->$method($request);
 
         return $this->after($request, $response);
+    }
+
+    /**
+     * Build a 405 Method Not Allowed response with an Allow header.
+     *
+     * RFC 9110 §15.5.6 requires the Allow header on 405 responses.
+     */
+    private function methodNotAllowed(): Response
+    {
+        return Response::json(['error' => 'Method Not Allowed'], 405)
+            ->withHeader('Allow', implode(', ', $this->getAllowedMethods()));
     }
 
     /**
@@ -157,7 +168,7 @@ abstract class AbstractResource
      */
     public function GET(Request $request): Response
     {
-        return Response::json(['error' => 'Method Not Allowed'], 405);
+        return $this->methodNotAllowed();
     }
 
     /**
@@ -165,7 +176,7 @@ abstract class AbstractResource
      */
     public function POST(Request $request): Response
     {
-        return Response::json(['error' => 'Method Not Allowed'], 405);
+        return $this->methodNotAllowed();
     }
 
     /**
@@ -173,7 +184,7 @@ abstract class AbstractResource
      */
     public function PUT(Request $request): Response
     {
-        return Response::json(['error' => 'Method Not Allowed'], 405);
+        return $this->methodNotAllowed();
     }
 
     /**
@@ -181,7 +192,7 @@ abstract class AbstractResource
      */
     public function DELETE(Request $request): Response
     {
-        return Response::json(['error' => 'Method Not Allowed'], 405);
+        return $this->methodNotAllowed();
     }
 
     /**
@@ -189,7 +200,7 @@ abstract class AbstractResource
      */
     public function PATCH(Request $request): Response
     {
-        return Response::json(['error' => 'Method Not Allowed'], 405);
+        return $this->methodNotAllowed();
     }
 
     /**

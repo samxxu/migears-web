@@ -45,6 +45,36 @@ class AbstractResourceTest extends TestCase
         $this->assertSame(405, $response->status);
     }
 
+    public function test405ResponseCarriesAllowHeader(): void
+    {
+        // RFC 9110 §15.5.6: 405 MUST generate an Allow header.
+        $resource = $this->makeResource();
+        $response = $resource->handle(new Request('POST', '/'), 'POST');
+        $this->assertSame(405, $response->status);
+        $this->assertArrayHasKey('Allow', $response->headers);
+        $allow = $response->headers['Allow'];
+        // Default resource has no overridden verbs, so Allow should contain
+        // at least OPTIONS and HEAD (always present).
+        $this->assertStringContainsString('OPTIONS', $allow);
+        $this->assertStringContainsString('HEAD', $allow);
+    }
+
+    public function test405AllowHeaderListsOverriddenMethods(): void
+    {
+        $resource = new class extends AbstractResource {
+            public function GET(Request $request): Response { return Response::json(['ok' => true]); }
+            public function POST(Request $request): Response { return Response::json(['ok' => true], 201); }
+        };
+        $response = $resource->handle(new Request('DELETE', '/'), 'DELETE');
+        $this->assertSame(405, $response->status);
+        $allow = $response->headers['Allow'];
+        $this->assertStringContainsString('GET', $allow);
+        $this->assertStringContainsString('POST', $allow);
+        $this->assertStringContainsString('OPTIONS', $allow);
+        $this->assertStringContainsString('HEAD', $allow);
+        $this->assertStringNotContainsString('DELETE', $allow);
+    }
+
     public function testOptionsReturnsAllowHeader(): void
     {
         $resource = new class extends AbstractResource {
