@@ -178,7 +178,7 @@ $rest = new MiRest(baseDir: __DIR__ . '/resources', namespace: 'App\\Resources')
 
 $rest->set(PDO::class,         fn() => new PDO('mysql:host=localhost;dbname=app', 'user', 'pass'));
 $rest->set('logger',           fn() => new Monolog\Logger('app'));
-$rest->set(RedisCache::class, fn() => new RedisCache(new Redis(), 'localhost', 6379));
+$rest->set(RedisCache::class, fn() => new RedisCache(new Redis()));
 ```
 
 **Rule of thumb**: needs configuration → register via `set()`.
@@ -459,7 +459,7 @@ $rest = new MiRest(baseDir: __DIR__ . '/resources', namespace: 'App\\Resources')
 
 $rest->set(PDO::class,          fn() => new PDO('mysql:host=localhost;dbname=app', 'user', 'pass'));
 $rest->set('logger',            fn() => new Monolog\Logger('app'));
-$rest->set(RedisCache::class, fn() => new RedisCache(new Redis(), 'localhost', 6379));
+$rest->set(RedisCache::class, fn() => new RedisCache(new Redis()));
 ```
 
 **经验法则**：需要配置 → 用 `set()` 注册。不需要配置 → 直接 `new`。无论哪种方式，你的业务代码都不依赖容器的任何魔法。
