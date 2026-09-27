@@ -47,9 +47,16 @@ resources/
 
 ### 2. Write Resource Class
 
+The class name and namespace have to match the path. The file below lives at
+`resources/Users/___user_id___/Index.php` and the bootstrap uses `namespace: 'App\\Resources'`,
+so the class is `App\Resources\Users\UserId\Index` — a wildcard directory contributes its own name
+in StudlyCase as a namespace segment (`___user_id___` → `UserId`).
+
 ```php
 <?php
 // resources/Users/___user_id___/Index.php
+
+namespace App\Resources\Users\UserId;
 
 use MiGears\Web\AbstractResource;
 use MiGears\Web\Request;
@@ -194,7 +201,7 @@ After the path is fully traversed, resource files are looked up in the following
 
 Finally, the located resource serves the request through the template method `handle()` (`before` → HTTP method → `after`), so **hooks run consistently** whether or not extra path segments matched. A catch-all resource receives any unmatched remaining segments via `$this->remaining`.
 
-Once located, the HTTP verb decides what runs: the handler the resource declares, or `405 Method Not Allowed` when it declares none. The default `OPTIONS()` reports what the resource supports through an `Allow` header.
+Once located, the HTTP verb decides what runs: the handler the resource declares, or `405 Method Not Allowed` when it declares none. A request whose verb is not an HTTP method gets the same 405 without ever reaching the class, so the resource's own helpers can never be invoked as handlers. The default `OPTIONS()` reports what the resource supports through an `Allow` header.
 
 URL segments are automatically converted to StudlyCase to match directory names (`/users` → `Users`, `/blog_posts` → `BlogPosts`). `.` / `..` segments are ignored, so the locator can never escape the resource root; `baseDir` must be an existing directory or an `InvalidArgumentException` is thrown.
 
@@ -315,9 +322,16 @@ resources/
 
 ### 2. 编写资源类
 
+类名与命名空间必须和路径对得上。下面的文件在 `resources/Users/___user_id___/Index.php`，
+bootstrap 里用的是 `namespace: 'App\\Resources'`，所以类名是
+`App\Resources\Users\UserId\Index` —— 通配目录会以自己的 StudlyCase 形式贡献一个命名空间段
+（`___user_id___` → `UserId`）。
+
 ```php
 <?php
 // resources/Users/___user_id___/Index.php
+
+namespace App\Resources\Users\UserId;
 
 use MiGears\Web\AbstractResource;
 use MiGears\Web\Request;
@@ -467,7 +481,7 @@ $rest->set(RedisCache::class, fn() => new RedisCache(new Redis(), 'localhost', 6
 
 最终，定位到的资源统一通过模板方法 `handle()`（`before` → HTTP 方法 → `after`）处理请求，因此**无论是否有多余路径段，前置/后置钩子行为一致**。兜底资源可通过 `$this->remaining` 拿到未匹配的剩余路径段。
 
-定位到资源之后，由 HTTP 动词决定执行什么：资源声明了就执行对应处理器，没声明则返回 `405 Method Not Allowed`；默认的 `OPTIONS()` 会通过 `Allow` 头报告该资源支持哪些方法。
+定位到资源之后，由 HTTP 动词决定执行什么：资源声明了就执行对应处理器，没声明则返回 `405 Method Not Allowed`。不是 HTTP 动词的请求同样得到 405，而且根本不会进入类内部，因此资源自己的辅助方法不可能被当成处理器调用；默认的 `OPTIONS()` 会通过 `Allow` 头报告该资源支持哪些方法。
 
 URL 段会自动转 StudlyCase 匹配目录名（`/users` → `Users`，`/blog_posts` → `BlogPosts`）。路径中的 `.` / `..` 段会被忽略，定位器永远不会逃出资源根目录；`baseDir` 必须是已存在的目录，否则抛出 `InvalidArgumentException`。
 

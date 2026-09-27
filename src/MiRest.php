@@ -142,55 +142,71 @@ class MiRest implements ContainerInterface
 
     /**
      * Handle a request and return a response.
+     *
+     * Dispatch runs first, then the global after hooks run once. Both stages are
+     * guarded, so handle() returns a Response on every path: a throwing after hook
+     * is logged and answered with an error response rather than escaping the
+     * method, and it can never run twice.
      */
     public function handle(Request $request): Response
     {
         try {
-            // Global before hooks
-            foreach ($this->beforeHandlers as $handler) {
-                if (null !== $response = $handler($request)) {
-                    return $this->runAfter($request, $response);
-                }
-            }
-
-            // Locate resource
-            $result = $this->locator->locate($request->path);
-            if ($result === null) {
-                return $this->runAfter($request, $this->handleNotFound());
-            }
-
-            [$shortClassName, $filePath, $params, $remaining, $namespaceSegments] = $result;
-
-            // Build fully qualified class name and load the file
-            $className = $this->buildClassName($shortClassName, $namespaceSegments);
-            if (!class_exists($className, false)) {
-                require_once $filePath;
-            }
-
-            // Instantiate resource
-            $resource = $this->createResource($className);
-            $resource->setParams($params);
-
-            // Remaining path → the located resource (e.g. a catch-all) serves
-            // the rest of the path through the same template method, so the
-            // before/after hooks run consistently.
-            if (!empty($remaining)) {
-                $resource->setRemaining($remaining);
-                $response = $resource->handle($request, $request->method);
-                return $this->runAfter($request, $response);
-            }
-
-            // Call the resource's handle method (template method: before → method → after)
-            $response = $resource->handle($request, $request->method);
-
-            return $this->runAfter($request, $response);
-
+            $response = $this->dispatch($request);
         } catch (ResourceNotFoundException $e) {
-            return $this->runAfter($request, $this->handleNotFound());
+            $response = $this->handleNotFound();
         } catch (\Throwable $e) {
             $this->logger->error($e->getMessage(), ['exception' => $e]);
-            return $this->runAfter($request, $this->handleError($e));
+            $response = $this->handleError($e);
         }
+
+        try {
+            return $this->runAfter($request, $response);
+        } catch (\Throwable $e) {
+            $this->logger->error('An after hook threw: ' . $e->getMessage(), ['exception' => $e]);
+
+            return $this->handleError($e);
+        }
+    }
+
+    /**
+     * Run the global before hooks, locate the resource and dispatch to it.
+     */
+    private function dispatch(Request $request): Response
+    {
+        // Global before hooks
+        foreach ($this->beforeHandlers as $handler) {
+            if (null !== $response = $handler($request)) {
+                return $response;
+            }
+        }
+
+        // Locate resource
+        $result = $this->locator->locate($request->path);
+        if ($result === null) {
+            return $this->handleNotFound();
+        }
+
+        [$shortClassName, $filePath, $params, $remaining, $namespaceSegments] = $result;
+
+        // Build fully qualified class name and load the file
+        $className = $this->buildClassName($shortClassName, $namespaceSegments);
+        if (!class_exists($className, false)) {
+            require_once $filePath;
+        }
+
+        // Instantiate resource
+        $resource = $this->createResource($className);
+        $resource->setParams($params);
+
+        // Remaining path → the located resource (e.g. a catch-all) serves
+        // the rest of the path through the same template method, so the
+        // before/after hooks run consistently.
+        if (!empty($remaining)) {
+            $resource->setRemaining($remaining);
+        }
+
+        // Call the resource's handle method (template method: before → method → after)
+        return $resource->handle($request, $request->method);
     }
 
     /**

@@ -271,6 +271,51 @@ class MiRestTest extends TestCase
         $this->assertSame('yes', $response->headers['X-Test']);
     }
 
+    public function testThrowingAfterHookRunsOnceAndBecomesA500(): void
+    {
+        $rest = new MiRest($this->baseDir, $this->namespace);
+        $calls = 0;
+        $rest->after(function (Request $r, Response $resp) use (&$calls) {
+            $calls++;
+            if ($calls === 1) {
+                throw new \RuntimeException('after boom');
+            }
+            return $resp;
+        });
+
+        $response = $rest->handle(new Request('GET', '/'));
+
+        $this->assertSame(1, $calls);
+        $this->assertSame(500, $response->status);
+    }
+
+    public function testThrowingAfterHookDoesNotEscapeHandle(): void
+    {
+        $rest = new MiRest($this->baseDir, $this->namespace);
+        $rest->after(function (Request $r, Response $resp): Response {
+            throw new \RuntimeException('after boom');
+        });
+
+        $response = $rest->handle(new Request('GET', '/'));
+
+        $this->assertSame(500, $response->status);
+    }
+
+    public function testAfterHooksRunOnceOnTheNotFoundPath(): void
+    {
+        $rest = new MiRest($this->baseDir, $this->namespace);
+        $calls = 0;
+        $rest->after(function (Request $r, Response $resp) use (&$calls): Response {
+            $calls++;
+            return $resp;
+        });
+
+        $response = $rest->handle(new Request('GET', '/no/such/resource'));
+
+        $this->assertSame(404, $response->status);
+        $this->assertSame(1, $calls);
+    }
+
     public function testMultipleBeforeHooks(): void
     {
         $rest = new MiRest($this->baseDir, $this->namespace);

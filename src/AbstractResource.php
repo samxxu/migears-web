@@ -16,6 +16,17 @@ namespace MiGears\Web;
 abstract class AbstractResource
 {
     /**
+     * The HTTP verbs a request may dispatch to.
+     *
+     * A request whose verb is not on this list is answered with 405 and never
+     * reaches the class: method_exists() is case-insensitive, so without this
+     * guard an internal helper could be invoked as if it were a handler.
+     *
+     * @var list<string>
+     */
+    private const HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
+
+    /**
      * Named parameters from the resource path (parsed from URL wildcards).
      *
      * @var array<string, string>
@@ -100,6 +111,9 @@ abstract class AbstractResource
     /**
      * Handle the request: before → HTTP method → after.
      * This is a template method; subclasses generally do not need to override it.
+     *
+     * Only the verbs in HTTP_METHODS are dispatchable; anything else is answered
+     * with 405 without consulting the class.
      */
     public function handle(Request $request, string $method): Response
     {
@@ -109,7 +123,7 @@ abstract class AbstractResource
             return $response;
         }
 
-        if (!method_exists($this, $method)) {
+        if (!in_array($method, self::HTTP_METHODS, true) || !method_exists($this, $method)) {
             return Response::json(['error' => 'Method Not Allowed'], 405);
         }
 

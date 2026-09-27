@@ -157,6 +157,34 @@ class AbstractResourceTest extends TestCase
         $this->assertSame('yes', $modified->headers['X-Custom']);
     }
 
+    public function testInternalMethodNamesAreNotDispatchable(): void
+    {
+        $calls = [];
+        $resource = new class($calls) extends AbstractResource {
+            public array $calls;
+            public function __construct(&$calls) { $this->calls = &$calls; }
+            public function GET(Request $request): Response { $this->calls[] = 'GET'; return Response::json(['ok' => true]); }
+        };
+
+        $verbs = ['HANDLE', 'handle', 'RESOLVE', 'PARAM', 'SETPARAMS', 'BEFORE', 'AFTER', 'GETALLOWEDMETHODS', 'BOGUS', 'TRACE'];
+        foreach ($verbs as $verb) {
+            $response = $resource->handle(new Request($verb, '/'), $verb);
+            $this->assertSame(405, $response->status, "$verb must not be dispatchable");
+        }
+
+        $this->assertSame([], $calls);
+        $this->assertSame(200, $resource->handle(new Request('GET', '/'), 'GET')->status);
+        $this->assertSame(['GET'], $calls);
+    }
+
+    public function testHttpVerbIsCaseInsensitive(): void
+    {
+        $resource = new class extends AbstractResource {
+            public function GET(Request $request): Response { return Response::json(['ok' => true]); }
+        };
+        $this->assertSame(200, $resource->handle(new Request('get', '/'), 'get')->status);
+    }
+
     public function testSetParams(): void
     {
         $resource = $this->makeResource();
