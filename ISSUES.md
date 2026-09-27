@@ -167,6 +167,16 @@ No test for `Allow` on 405, `Response::send()` at all, URL-encoded paths, a null
 ### P2-5
 <!-- 负责人反馈 / owner response here -->
 
+- **rejected** — the finding's substantive claim is header injection, and PHP's own `header()` already forbids it, so `src/Response.php:100-101` cannot be made to split one header into two. Probe on PHP 8.5.10:
+  - `@header("X-Test: a\r\nX-Injected: b")` → returns `null` and raises `Header may not contain more than a single header, new line detected`.
+  - `@header("X-Test\r\nX-Injected: b")` → the same refusal and warning for a CRLF in the *name*.
+  The audit's "security-relevant gap" risk flag is therefore refuted by the runtime, not by an argument.
+- The other two "validations" are not defects either. `http_response_code()` raised no warning for any code in the probe — in range (`200`, `599`) or not (`0`, `99`, `600`, `9999`) — so a status-range check would be the framework second-guessing PHP; and a header-name check would only re-implement the newline invariant `header()` already enforces (a name containing a space is a developer error, not an injection path). `send()` is a deliberate thin passthrough to PHP's three response primitives — `http_response_code()`, `header()`, `echo` — and adding re-validation of PHP's own contract is not this class's job.
+- The "has no test at all" half is closed: `tests/ResponseTest.php:139-167` (`testSendEchoesBody`, `testSendReturnsVoid`), added by `60e4f7e` ("Address P1-1, P2-1, P2-2, P2-3, P2-5, P3-1 from 4th round review"). No source change was made.
+- 中文: **rejected**——本条有分量的主张是头注入，而 PHP 自带的 `header()` 已禁止，`src/Response.php:100-101` 无法把一个头拆成两个。PHP 8.5.10 探针：`@header("X-Test: a\r\nX-Injected: b")` 返回 `null` 并报 `Header may not contain more than a single header, new line detected`；名字里含 CRLF 同样被拒并报警告。因此审计的「security-relevant gap」风险标记是被运行时否掉的，而非靠论证。另外两条「校验」也不是缺陷：`http_response_code()` 在探针中对 `0`、`99`、`200`、`599`、`600`、`9999` 都不报警告，加状态码范围检查等于替 PHP 做判断；头名校验只是重复 `header()` 已保证的换行不变量（名字含空格属开发者笔误，不是注入路径）。`send()` 是对 `http_response_code()`/`header()`/`echo` 三个原语的刻意薄封装，替 PHP 复检其自身契约不是本类的职责。「完全没有测试」这半边已闭合（`tests/ResponseTest.php:139-167`，由 `60e4f7e` 加入）。未改动任何源码。
+- Evidence / 证据: `php web_probe2.php` → `P1 value-CRLF ret=NULL warn='Header may not contain more than a single header, new line detected'`; `P2 name-CRLF ret=NULL warn=…same…`; `P4 code=0 ret=false warn=NULL`, `code=99/200/599/600/9999 ret=<previous> warn=NULL`.
+- owner — migears-web
+
 ### P3-1
 <!-- 负责人反馈 / owner response here -->
 <!-- 跨模块条目 / cross-module items — 由跨模块协调人提出，非本轮评审 finding。口径见工作区根目录 `migears-engineering-gates.md`。
