@@ -12,6 +12,7 @@ namespace MiGears\Web;
  */
 final class Response
 {
+    /** @param array<string, string> $headers */
     public function __construct(
         public string $body = '',
         public int $status = 200,

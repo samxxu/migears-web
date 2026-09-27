@@ -99,6 +99,8 @@ class ResourceLocator
      * Parse a path into a segment array.
      * Dot segments ('.', '..') are dropped so the locator can never
      * escape the resource base directory.
+     *
+     * @return list<string>
      */
     private function parsePath(string $path): array
     {

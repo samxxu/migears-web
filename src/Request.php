@@ -12,6 +12,13 @@ namespace MiGears\Web;
  */
 final class Request
 {
+    /**
+     * @param array<string, mixed> $query
+     * @param array<string, mixed> $body
+     * @param array<string, mixed> $headers
+     * @param array<string, mixed> $server
+     * @param array<string, mixed> $files
+     */
     public function __construct(
         public string $method,
         public string $path,
