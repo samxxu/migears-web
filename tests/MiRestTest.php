@@ -5,8 +5,11 @@ namespace MiGears\Web\Tests;
 
 use PHPUnit\Framework\TestCase;
 use MiGears\Web\MiRest;
+use MiGears\Web\NotFoundException;
 use MiGears\Web\Request;
 use MiGears\Web\Response;
+use Psr\Log\LoggerInterface;
+use Psr\Log\NullLogger;
 
 class MiRestTest extends TestCase
 {
@@ -19,11 +22,25 @@ class MiRestTest extends TestCase
         $this->namespace = 'MiGears\\Web\\Tests\\Fixtures\\Resources';
     }
 
+    /**
+     * A MiRest with a logger registered, as every real bootstrap must do.
+     *
+     * The framework resolves its logger from the container and refuses to
+     * invent a silent default, so a missing registration is a loud failure.
+     * Tests that are not about that failure register NullLogger here.
+     */
+    private function rest(?string $baseDir = null, ?string $namespace = null): MiRest
+    {
+        $rest = new MiRest($baseDir ?? $this->baseDir, $namespace ?? $this->namespace);
+        $rest->set(LoggerInterface::class, static fn() => new NullLogger());
+        return $rest;
+    }
+
     // --- Basic routing tests ---
 
     public function testGetRoot(): void
     {
-        $rest = new MiRest($this->baseDir, $this->namespace);
+        $rest = $this->rest();
         $response = $rest->handle(new Request('GET', '/'));
         $this->assertSame(200, $response->status);
         $data = json_decode($response->body, true);
@@ -44,7 +61,7 @@ class MiRestTest extends TestCase
         mkdir($dir, 0777, true);
         file_put_contents($dir . '/Index.php', '<?php use MiGears\Web\AbstractResource; use MiGears\Web\Request; use MiGears\Web\Response; class Index extends AbstractResource { public function GET(Request $r): Response { return Response::json(["ok"=>true]); } }');
         try {
-            $rest = new MiRest($dir, '');
+            $rest = $this->rest($dir, '');
             $response = $rest->handle(new Request('GET', '/'));
             $this->assertSame(200, $response->status);
             $data = json_decode($response->body, true);
@@ -57,7 +74,7 @@ class MiRestTest extends TestCase
 
     public function testTraversalRequestIsNotFound(): void
     {
-        $rest = new MiRest($this->baseDir, $this->namespace);
+        $rest = $this->rest();
         // '..' is dropped, 'secret' has no resource inside the base dir → 404
         $response = $rest->handle(new Request('GET', '/../secret'));
         $this->assertSame(404, $response->status);
@@ -65,7 +82,7 @@ class MiRestTest extends TestCase
 
     public function testTraversalRequestResolvesInsideBaseDir(): void
     {
-        $rest = new MiRest($this->baseDir, $this->namespace);
+        $rest = $this->rest();
         // '..' is dropped, so the request hits Users/Index inside the base dir
         $response = $rest->handle(new Request('GET', '/../users'));
         $this->assertSame(200, $response->status);
@@ -75,7 +92,7 @@ class MiRestTest extends TestCase
 
     public function testPostRoot(): void
     {
-        $rest = new MiRest($this->baseDir, $this->namespace);
+        $rest = $this->rest();
         $response = $rest->handle(new Request('POST', '/', body: ['key' => 'value']));
         $this->assertSame(201, $response->status);
         $data = json_decode($response->body, true);
@@ -84,7 +101,7 @@ class MiRestTest extends TestCase
 
     public function testGetUsersList(): void
     {
-        $rest = new MiRest($this->baseDir, $this->namespace);
+        $rest = $this->rest();
         $response = $rest->handle(new Request('GET', '/users', query: ['page' => '2']));
         $this->assertSame(200, $response->status);
         $data = json_decode($response->body, true);
@@ -94,7 +111,7 @@ class MiRestTest extends TestCase
 
     public function testPostUsers(): void
     {
-        $rest = new MiRest($this->baseDir, $this->namespace);
+        $rest = $this->rest();
         $response = $rest->handle(new Request('POST', '/users', body: ['name' => 'Alice']));
         $this->assertSame(201, $response->status);
         $data = json_decode($response->body, true);
@@ -110,7 +127,7 @@ class MiRestTest extends TestCase
     {
         $body = ['name' => 'Bob'];
         $request = new Request('POST', '/users', body: Request::parseBody([], json_encode($body)));
-        $rest = new MiRest($this->baseDir, $this->namespace);
+        $rest = $this->rest();
         $response = $rest->handle($request);
         $this->assertSame(201, $response->status);
         $data = json_decode($response->body, true);
@@ -119,7 +136,7 @@ class MiRestTest extends TestCase
 
     public function testGetSingleUser(): void
     {
-        $rest = new MiRest($this->baseDir, $this->namespace);
+        $rest = $this->rest();
         $response = $rest->handle(new Request('GET', '/users/42'));
         $this->assertSame(200, $response->status);
         $data = json_decode($response->body, true);
@@ -129,7 +146,7 @@ class MiRestTest extends TestCase
 
     public function testPutUser(): void
     {
-        $rest = new MiRest($this->baseDir, $this->namespace);
+        $rest = $this->rest();
         $response = $rest->handle(new Request('PUT', '/users/42'));
         $this->assertSame(200, $response->status);
         $data = json_decode($response->body, true);
@@ -138,7 +155,7 @@ class MiRestTest extends TestCase
 
     public function testDeleteUser(): void
     {
-        $rest = new MiRest($this->baseDir, $this->namespace);
+        $rest = $this->rest();
         $response = $rest->handle(new Request('DELETE', '/users/42'));
         $this->assertSame(200, $response->status);
         $data = json_decode($response->body, true);
@@ -147,7 +164,7 @@ class MiRestTest extends TestCase
 
     public function testNestedResource(): void
     {
-        $rest = new MiRest($this->baseDir, $this->namespace);
+        $rest = $this->rest();
         $response = $rest->handle(new Request('GET', '/users/42/posts'));
         $this->assertSame(200, $response->status);
         $data = json_decode($response->body, true);
@@ -157,7 +174,7 @@ class MiRestTest extends TestCase
 
     public function testMultipleWildcardsThroughFramework(): void
     {
-        $rest = new MiRest($this->baseDir, $this->namespace);
+        $rest = $this->rest();
         $response = $rest->handle(new Request('GET', '/regions/asia/tokyo'));
         $this->assertSame(200, $response->status);
         $data = json_decode($response->body, true);
@@ -171,7 +188,7 @@ class MiRestTest extends TestCase
         // is decoded separately, so decoding the route value too would let a raw
         // value such as '..' reach resource code, where it is often concatenated
         // into a path (see README, "Route parameters keep their raw URL encoding").
-        $rest = new MiRest($this->baseDir, $this->namespace);
+        $rest = $this->rest();
         $response = $rest->handle(new Request('GET', '/users/42%20x'));
         $this->assertSame(200, $response->status);
         $data = json_decode($response->body, true);
@@ -204,7 +221,7 @@ PHP;
         file_put_contents($dir . '/Users/___user_id___/Index.php', sprintf($template, $ns, 'wildcard'));
 
         try {
-            $rest = new MiRest($dir, $ns);
+            $rest = $this->rest($dir, $ns);
 
             // Exact directory: /users/user_id → Users/UserId (loads the class)
             $exact = $rest->handle(new Request('GET', '/users/user_id'));
@@ -230,7 +247,7 @@ PHP;
 
     public function testNotFound(): void
     {
-        $rest = new MiRest($this->baseDir, $this->namespace);
+        $rest = $this->rest();
         $response = $rest->handle(new Request('GET', '/nonexistent'));
         $this->assertSame(404, $response->status);
         $data = json_decode($response->body, true);
@@ -239,7 +256,7 @@ PHP;
 
     public function testCustomNotFoundHandler(): void
     {
-        $rest = new MiRest($this->baseDir, $this->namespace);
+        $rest = $this->rest();
         $rest->notFound(fn() => Response::html('<h1>404</h1>', 404));
         $response = $rest->handle(new Request('GET', '/nonexistent'));
         $this->assertSame(404, $response->status);
@@ -248,7 +265,7 @@ PHP;
 
     public function testMethodNotAllowed(): void
     {
-        $rest = new MiRest($this->baseDir, $this->namespace);
+        $rest = $this->rest();
         // users/Index does not implement patch
         $response = $rest->handle(new Request('PATCH', '/users'));
         $this->assertSame(405, $response->status);
@@ -256,7 +273,7 @@ PHP;
 
     public function testOptionsViaFrameworkReturnsAllowHeader(): void
     {
-        $rest = new MiRest($this->baseDir, $this->namespace);
+        $rest = $this->rest();
         // /users Index implements GET + POST
         $response = $rest->handle(new Request('OPTIONS', '/users'));
         $this->assertSame(204, $response->status);
@@ -266,7 +283,7 @@ PHP;
 
     public function testHeadViaFrameworkReturnsBodyless(): void
     {
-        $rest = new MiRest($this->baseDir, $this->namespace);
+        $rest = $this->rest();
         $response = $rest->handle(new Request('HEAD', '/'));
         $this->assertSame(200, $response->status);
         $this->assertSame('', $response->body);
@@ -274,7 +291,7 @@ PHP;
 
     public function testErrorHandler(): void
     {
-        $rest = new MiRest($this->baseDir, $this->namespace);
+        $rest = $this->rest();
         $rest->before(function () { throw new \RuntimeException('boom'); });
         $response = $rest->handle(new Request('GET', '/'));
         $this->assertSame(500, $response->status);
@@ -284,7 +301,7 @@ PHP;
 
     public function testCustomErrorHandler(): void
     {
-        $rest = new MiRest($this->baseDir, $this->namespace);
+        $rest = $this->rest();
         $rest->error(fn(\Throwable $e) => Response::json(['msg' => $e->getMessage()], 503));
         $rest->before(function () { throw new \RuntimeException('custom error'); });
         $response = $rest->handle(new Request('GET', '/'));
@@ -297,7 +314,7 @@ PHP;
 
     public function testBeforeHookShortCircuit(): void
     {
-        $rest = new MiRest($this->baseDir, $this->namespace);
+        $rest = $this->rest();
         $rest->before(fn(Request $r) => Response::json(['blocked' => true], 401));
         $response = $rest->handle(new Request('GET', '/'));
         $this->assertSame(401, $response->status);
@@ -307,7 +324,7 @@ PHP;
 
     public function testBeforeHookPassesThrough(): void
     {
-        $rest = new MiRest($this->baseDir, $this->namespace);
+        $rest = $this->rest();
         $called = false;
         $rest->before(function (Request $r) use (&$called) {
             $called = true;
@@ -320,7 +337,7 @@ PHP;
 
     public function testAfterHookModifiesResponse(): void
     {
-        $rest = new MiRest($this->baseDir, $this->namespace);
+        $rest = $this->rest();
         $rest->after(function (Request $r, Response $resp) {
             return new Response(
                 body: $resp->body,
@@ -334,7 +351,7 @@ PHP;
 
     public function testThrowingAfterHookRunsOnceAndBecomesA500(): void
     {
-        $rest = new MiRest($this->baseDir, $this->namespace);
+        $rest = $this->rest();
         $calls = 0;
         $rest->after(function (Request $r, Response $resp) use (&$calls) {
             $calls++;
@@ -352,7 +369,7 @@ PHP;
 
     public function testThrowingAfterHookDoesNotEscapeHandle(): void
     {
-        $rest = new MiRest($this->baseDir, $this->namespace);
+        $rest = $this->rest();
         $rest->after(function (Request $r, Response $resp): Response {
             throw new \RuntimeException('after boom');
         });
@@ -364,7 +381,7 @@ PHP;
 
     public function testAfterHooksRunOnceOnTheNotFoundPath(): void
     {
-        $rest = new MiRest($this->baseDir, $this->namespace);
+        $rest = $this->rest();
         $calls = 0;
         $rest->after(function (Request $r, Response $resp) use (&$calls): Response {
             $calls++;
@@ -379,7 +396,7 @@ PHP;
 
     public function testMultipleBeforeHooks(): void
     {
-        $rest = new MiRest($this->baseDir, $this->namespace);
+        $rest = $this->rest();
         $order = [];
         $rest->before(function () use (&$order) { $order[] = 1; return null; });
         $rest->before(function () use (&$order) { $order[] = 2; return null; });
@@ -392,7 +409,8 @@ PHP;
     public function testErrorLogging(): void
     {
         $logger = new ArrayLogger();
-        $rest = new MiRest($this->baseDir, $this->namespace, $logger);
+        $rest = $this->rest();
+        $rest->set(LoggerInterface::class, fn() => $logger);
         $rest->before(function () { throw new \RuntimeException('log test'); });
         $rest->handle(new Request('GET', '/'));
         $this->assertGreaterThan(0, $logger->count());
@@ -401,40 +419,46 @@ PHP;
         $this->assertSame('log test', $log['message']);
     }
 
-    public function testLoggerRegisteredInContainerIsUsedByFramework(): void
+    public function testUnregisteredLoggerFailsLoudly(): void
     {
-        // No explicit logger in constructor — framework should pick up
-        // LoggerInterface from the container (priority #2).
-        $logger = new ArrayLogger();
+        // The framework will not invent a silent default: with nothing
+        // registered, the very first request fails instead of logging nowhere.
         $rest = new MiRest($this->baseDir, $this->namespace);
-        $rest->set(\Psr\Log\LoggerInterface::class, fn() => $logger);
 
-        $rest->before(function () { throw new \RuntimeException('container-logger'); });
+        $this->expectException(NotFoundException::class);
+
         $rest->handle(new Request('GET', '/'));
-
-        $this->assertGreaterThan(0, $logger->count());
-        $this->assertSame('container-logger', $logger->first()['message']);
     }
 
-    public function testExplicitLoggerTakesPriorityOverContainer(): void
+    public function testARegisteredNonLoggerEntryFailsLoudly(): void
     {
-        $explicit = new ArrayLogger();
-        $container = new ArrayLogger();
-        $rest = new MiRest($this->baseDir, $this->namespace, $explicit);
-        $rest->set(\Psr\Log\LoggerInterface::class, fn() => $container);
+        // Registering the wrong object under LoggerInterface::class is an
+        // assembly mistake too, caught by the same early check.
+        $rest = new MiRest($this->baseDir, $this->namespace);
+        $rest->set(LoggerInterface::class, fn() => new \stdClass());
 
-        $rest->before(function () { throw new \RuntimeException('priority-test'); });
+        $this->expectException(\RuntimeException::class);
+
         $rest->handle(new Request('GET', '/'));
+    }
 
-        $this->assertGreaterThan(0, $explicit->count(), 'explicit logger must receive the error');
-        $this->assertSame(0, $container->count(), 'container logger must NOT be used when explicit logger is provided');
+    public function testNullLoggerSilencesFrameworkErrors(): void
+    {
+        // Silence is an explicit choice: register NullLogger.
+        $rest = new MiRest($this->baseDir, $this->namespace);
+        $rest->set(LoggerInterface::class, fn() => new NullLogger());
+        $rest->before(function () { throw new \RuntimeException('silent'); });
+
+        $response = $rest->handle(new Request('GET', '/'));
+
+        $this->assertSame(500, $response->status);
     }
 
     // --- CatchAll tests ---
 
     public function testCatchAllResource(): void
     {
-        $rest = new MiRest($this->baseDir, $this->namespace);
+        $rest = $this->rest();
         $response = $rest->handle(new Request('GET', '/catchall/any/path'));
         $this->assertSame(200, $response->status);
         $data = json_decode($response->body, true);
@@ -446,7 +470,7 @@ PHP;
 
     public function testCatchAllRootRunsHooks(): void
     {
-        $rest = new MiRest($this->baseDir, $this->namespace);
+        $rest = $this->rest();
         $response = $rest->handle(new Request('GET', '/catchall'));
         $this->assertSame(200, $response->status);
         // without remaining path, hooks must also run (consistency)
@@ -459,7 +483,7 @@ PHP;
     {
         // Without namespace, it should still work if the class exists (just testing no crash)
         // Since our Fixtures are all under namespace, this test verifies passing no namespace doesn't cause a fatal error
-        $rest = new MiRest($this->baseDir);
+        $rest = $this->rest($this->baseDir, '');
         $response = $rest->handle(new Request('GET', '/nonexistent'));
         $this->assertSame(404, $response->status);
     }

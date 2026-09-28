@@ -23,6 +23,9 @@ class ContainerTest extends TestCase
         $this->baseDir = __DIR__ . '/Fixtures/resources';
         $this->namespace = 'MiGears\\Web\\Tests\\Fixtures\\Resources';
         $this->rest = new MiRest($this->baseDir, $this->namespace);
+        // The framework resolves its own logger from the container; silence it
+        // so the container-focused tests do not trip over that requirement.
+        $this->rest->set(\Psr\Log\LoggerInterface::class, static fn() => new \Psr\Log\NullLogger());
     }
 
     public function testItIsAPsr11Container(): void

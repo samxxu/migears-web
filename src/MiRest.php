@@ -5,7 +5,6 @@ namespace MiGears\Web;
 
 use Psr\Container\ContainerInterface;
 use Psr\Log\LoggerInterface;
-use Psr\Log\NullLogger;
 
 /**
  * MiRest — a minimalist REST framework.
@@ -21,6 +20,7 @@ use Psr\Log\NullLogger;
  *
  * Usage:
  *   $rest = new MiRest(__DIR__ . '/resources', 'App\\Resources');
+ *   $rest->set(LoggerInterface::class, fn() => new NullLogger()); // required; NullLogger for silence
  *   $rest->set(PDO::class, fn() => new PDO('mysql:host=localhost;dbname=app', 'user', 'pass'));
  *   $rest->set(OrderManager::class, static fn() => new OrderManager($rest));
  *   $response = $rest->handle(Request::fromGlobals());
@@ -28,11 +28,9 @@ use Psr\Log\NullLogger;
  */
 class MiRest implements ContainerInterface
 {
-    public const VERSION = '2.0.1';
+    public const VERSION = '2.1.0';
 
     private ResourceLocator $locator;
-    private ?LoggerInterface $logger = null;
-    private ?LoggerInterface $explicitLogger = null;
 
     /** @var array<string, callable(): mixed> */
     private array $factories = [];
@@ -55,38 +53,8 @@ class MiRest implements ContainerInterface
     public function __construct(
         private readonly string $baseDir,
         private readonly string $namespace = '',
-        ?LoggerInterface $logger = null,
     ) {
         $this->locator = new ResourceLocator($baseDir);
-        $this->explicitLogger = $logger;
-    }
-
-    /**
-     * Resolve the logger to use for framework errors.
-     *
-     * Priority:
-     *   1. Explicit constructor argument
-     *   2. LoggerInterface registered in the container
-     *   3. NullLogger (silent fallback)
-     *
-     * Resolved lazily on first use so the container can be populated after
-     * the constructor.
-     */
-    private function getLogger(): LoggerInterface
-    {
-        if ($this->logger !== null) {
-            return $this->logger;
-        }
-
-        if ($this->explicitLogger !== null) {
-            return $this->logger = $this->explicitLogger;
-        }
-
-        try {
-            return $this->logger = $this->get(LoggerInterface::class);
-        } catch (NotFoundException $e) {
-            return $this->logger = new NullLogger();
-        }
     }
 
     /**
@@ -172,26 +140,38 @@ class MiRest implements ContainerInterface
     /**
      * Handle a request and return a response.
      *
-     * Dispatch runs first, then the global after hooks run once. Both stages are
+     * The logger is resolved from the container first, before dispatch starts:
+     * a missing or wrong registration must fail loudly here instead of being
+     * hidden behind an internal default. Register LoggerInterface at bootstrap —
+     * NullLogger if you want silence.
+     *
+     * Dispatch runs next, then the global after hooks run once. Both stages are
      * guarded, so handle() returns a Response on every path: a throwing after hook
      * is logged and answered with an error response rather than escaping the
      * method, and it can never run twice.
      */
     public function handle(Request $request): Response
     {
+        $logger = $this->get(LoggerInterface::class);
+        if (!$logger instanceof LoggerInterface) {
+            throw new \RuntimeException(
+                "The container entry '" . LoggerInterface::class . "' must be a Psr\\Log\\LoggerInterface instance"
+            );
+        }
+
         try {
             $response = $this->dispatch($request);
         } catch (ResourceNotFoundException $e) {
             $response = $this->handleNotFound();
         } catch (\Throwable $e) {
-            $this->getLogger()->error($e->getMessage(), ['exception' => $e]);
+            $logger->error($e->getMessage(), ['exception' => $e]);
             $response = $this->handleError($e);
         }
 
         try {
             return $this->runAfter($request, $response);
         } catch (\Throwable $e) {
-            $this->getLogger()->error('An after hook threw: ' . $e->getMessage(), ['exception' => $e]);
+            $logger->error('An after hook threw: ' . $e->getMessage(), ['exception' => $e]);
 
             return $this->handleError($e);
         }

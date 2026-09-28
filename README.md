@@ -1,6 +1,6 @@
 # migears/web
 
-![Version](https://img.shields.io/badge/version-2.0.1-blue)
+![Version](https://img.shields.io/badge/version-2.1.0-blue)
 
 A minimalist REST framework with directory-as-routing. Zero magic, zero global variables, core code under 500 lines.
 
@@ -107,6 +107,7 @@ $rest = new MiRest(
 );
 
 // Register only what needs configuration
+$rest->set(\Psr\Log\LoggerInterface::class, fn() => new \Psr\Log\NullLogger()); // required; NullLogger for silence
 $rest->set(PDO::class, fn() => new PDO('mysql:host=localhost;dbname=app', 'user', 'pass'));
 
 $response = $rest->handle(Request::fromGlobals());
@@ -150,6 +151,14 @@ $rest->get('missing');    // throws NotFoundException — an unregistered id is 
 `get()` throwing is PSR-11's requirement rather than a style choice: a typo or a forgotten registration must fail where it is asked for, instead of surfacing later as a `null` that "is not an object". Probing for something optional is what `has()` is for. `NotFoundException` is also a `RuntimeException`, and it is not `ResourceNotFoundException` — that one means "no resource matched this path" (a 404), this one means "the application was not wired correctly" (a 500).
 
 Re-registering with `set()` replaces the factory **and drops the cached instance**, so the next `get()` builds a fresh object — handy for redeploy/rebuild or tests.
+
+### The framework's own logger
+
+When the framework reports an internal error — a resource or a global `after` hook that throws — it writes through a `LoggerInterface` resolved from the container. There is no built-in default: it is resolved at the start of every `handle()` call, so an unregistered (or wrong-typed) entry fails loudly on the first request instead of being hidden behind a silent fallback. Registering `NullLogger` is how you ask for silence:
+
+```php
+$rest->set(\Psr\Log\LoggerInterface::class, fn() => new \Psr\Log\NullLogger());
+```
 
 ### Using the container inside resources
 
@@ -282,7 +291,7 @@ MIT
 
 # migears/web
 
-![Version](https://img.shields.io/badge/version-2.0.1-blue)
+![Version](https://img.shields.io/badge/version-2.1.0-blue)
 
 极简 REST 框架，目录即路由。零魔法、零全局变量，核心代码不到 500 行。
 
@@ -388,6 +397,7 @@ $rest = new MiRest(
 );
 
 // 只注册需要配置的服务
+$rest->set(\Psr\Log\LoggerInterface::class, fn() => new \Psr\Log\NullLogger()); // 必需；要静默就用 NullLogger
 $rest->set(PDO::class, fn() => new PDO('mysql:host=localhost;dbname=app', 'user', 'pass'));
 
 $response = $rest->handle(Request::fromGlobals());
@@ -437,6 +447,14 @@ $rest->get('missing');    // 抛 NotFoundException —— 未注册的 id 属于
 后者是「没有资源匹配这个路径」（404），前者是「应用没装配对」（500）。
 
 重新 `set()` 会替换工厂**并丢弃已缓存的实例**，下次 `get()` 会构建全新对象 —— 适合重新部署或测试场景。
+
+### 框架自身的 logger
+
+框架报告内部错误时——资源或全局 `after` 钩子抛异常——会通过从容器解析的 `LoggerInterface` 落日志。这里没有内置默认值：它在每次 `handle()` 开始时解析，因此未注册（或类型不对）的条目会在第一个请求上大声失败，而不是被隐式兜底吞掉。想要静默，就显式注册 `NullLogger`：
+
+```php
+$rest->set(\Psr\Log\LoggerInterface::class, fn() => new \Psr\Log\NullLogger());
+```
 
 ### 在资源类内使用容器
 
