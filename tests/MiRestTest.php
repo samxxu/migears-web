@@ -243,6 +243,57 @@ PHP;
         }
     }
 
+    public function testResourceClassIsNotResolvedByTheAutoloader(): void
+    {
+        // The locator found the file, but that file declares no class. The name
+        // must not be resolved anywhere else: an autoloader mapping the FQCN to a
+        // different tree would otherwise answer the route with a class the
+        // locator never found.
+        $suffix = uniqid('noload');
+        $ns = 'MiGears\\Web\\Tests\\' . $suffix;
+        $dir = sys_get_temp_dir() . '/migears-noload-' . $suffix;
+        $elsewhere = sys_get_temp_dir() . '/migears-elsewhere-' . $suffix;
+        mkdir($dir . '/Foo', 0777, true);
+        mkdir($elsewhere . '/Foo', 0777, true);
+
+        file_put_contents($dir . '/Foo/Index.php', "<?php\n// declares no class\n");
+
+        $template = <<<'PHP'
+<?php
+namespace %s\Foo;
+use MiGears\Web\AbstractResource;
+use MiGears\Web\Request;
+use MiGears\Web\Response;
+class Index extends AbstractResource {
+    public function GET(Request $r): Response { return Response::json(['from' => 'elsewhere']); }
+}
+PHP;
+        file_put_contents($elsewhere . '/Foo/Index.php', sprintf($template, $ns));
+
+        $autoload = static function (string $class) use ($ns, $elsewhere): void {
+            if ($class === $ns . '\\Foo\\Index') {
+                require $elsewhere . '/Foo/Index.php';
+            }
+        };
+        spl_autoload_register($autoload);
+
+        try {
+            $rest = $this->rest($dir, $ns);
+            $response = $rest->handle(new Request('GET', '/foo'));
+
+            $this->assertSame(500, $response->status);
+            $this->assertNotSame('elsewhere', json_decode($response->body, true)['from'] ?? null);
+        } finally {
+            spl_autoload_unregister($autoload);
+            unlink($dir . '/Foo/Index.php');
+            rmdir($dir . '/Foo');
+            rmdir($dir);
+            unlink($elsewhere . '/Foo/Index.php');
+            rmdir($elsewhere . '/Foo');
+            rmdir($elsewhere);
+        }
+    }
+
     // --- Error handling tests ---
 
     public function testNotFound(): void

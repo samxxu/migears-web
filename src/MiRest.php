@@ -283,6 +283,16 @@ class MiRest implements ContainerInterface
     {
         if (!class_exists($className, false)) {
             require_once $filePath;
+
+            // The located file has to be the one that declares the class. Falling
+            // back to the autoloader here would answer the route with a class from
+            // a file the locator never found.
+            if (!class_exists($className, false)) {
+                throw new \RuntimeException(
+                    "The resource file {$filePath} was located for {$className} but does not declare it"
+                );
+            }
+
             return;
         }
 
@@ -300,7 +310,7 @@ class MiRest implements ContainerInterface
      */
     private function createResource(string $className): AbstractResource
     {
-        if (!class_exists($className)) {
+        if (!class_exists($className, false)) {
             throw new \RuntimeException("Resource class not found: $className");
         }
         $resource = new $className();

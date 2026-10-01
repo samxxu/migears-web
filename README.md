@@ -20,6 +20,21 @@ A minimalist REST framework with directory-as-routing. Zero magic, zero global v
 - **`before()` / `after()` hooks** — Lightweight middleware alternative
 - **`___param___` wildcard directories** — Capture URL segments as named parameters
 
+## Boundaries
+
+**In scope**
+
+- Directory-as-routing and dispatch: `ResourceLocator` walks the filesystem (`Index.php` / `___param___` / `CatchAllResource.php`), and `MiRest::handle()` wires global before/after hooks, the 404 and error handlers, and the template method `before` → HTTP verb → `after`.
+- The lightweight `Request` / `Response` objects (`Request::fromGlobals()`, `Response::json` / `html` / `redirect` / `empty`, `send()`) and `AbstractResource`'s HTTP verb handlers, including the `OPTIONS` / `HEAD` defaults and the `405` response with an `Allow` header.
+- The PSR-11 container that `MiRest` itself is (`set()` / `has()` / `get()`, lazy-singleton factories) plus `$this->resolve()` inside resources — it is the composition root that wires the sibling modules together.
+
+**Not in scope (by design)**
+
+- Persistence / data access — no database connection, SQL builder or DAO; `PDO` is only ever registered as an opaque container entry. Owned by `migears/dao` / `migears/sql` / `migears/mitable`.
+- Business logic and orchestration — managers, the event bus and domain models come from `migears/manager` / `migears/domain`; this package only calls the resource handler it dispatches to.
+- Rendering / templating — `Response::html()` merely carries an HTML string; view compilation and layout rendering belong to `migears/pages` / `migears/template`.
+- Logging, caching, auth, mail, image and i18n — each is a sibling module (`migears/log` / `migears/cache` / `migears/security` / `migears/mail` / `migears/image` / `migears/i18n`); this package only resolves a PSR-3 `LoggerInterface` from the container and implements none of them.
+
 ## Installation
 
 ```bash
@@ -309,6 +324,21 @@ MIT
 - **内置容器，PSR-11** — 只注册需要配置的部分（PDO、Redis、Logger、DAO、Manager），其他直接 `new`
 - **`before()` / `after()` 钩子** — 轻量级中间件替代方案
 - **`___param___` 通配符目录** — 捕获 URL 段作为命名参数
+
+## 边界
+
+**范围内**
+
+- 目录即路由与分发：`ResourceLocator` 逐级遍历文件系统（`Index.php` / `___param___` / `CatchAllResource.php`），`MiRest::handle()` 负责接线全局 before/after 钩子、404 与异常处理器，以及 `before` → HTTP 动词 → `after` 模板方法。
+- 轻量 `Request` / `Response` 对象（`Request::fromGlobals()`、`Response::json` / `html` / `redirect` / `empty`、`send()`），以及 `AbstractResource` 的 HTTP 动词处理器，包括默认 `OPTIONS` / `HEAD` 与带 `Allow` 头的 `405` 响应。
+- `MiRest` 本身就是的 PSR-11 容器（`set()` / `has()` / `get()`，懒加载单例工厂），以及资源内的 `$this->resolve()` —— 它是把各兄弟模块接线到一起的组合根。
+
+**范围外（刻意不做）**
+
+- 持久化 / 数据访问 —— 不含数据库连接、SQL 构造或 DAO；`PDO` 只是被当作不透明的容器条目注册。由 `migears/dao` / `migears/sql` / `migears/mitable` 负责。
+- 业务逻辑与编排 —— Manager、事件总线与领域模型来自 `migears/manager` / `migears/domain`；本包只调用它所分发的资源处理器。
+- 渲染 / 模板 —— `Response::html()` 只承载一段 HTML 字符串；视图编译与布局渲染属于 `migears/pages` / `migears/template`。
+- 日志、缓存、鉴权、邮件、图像与国际化 —— 各自都是兄弟模块（`migears/log` / `migears/cache` / `migears/security` / `migears/mail` / `migears/image` / `migears/i18n`）；本包只从容器解析 PSR-3 `LoggerInterface`，绝不实现其中任何一项。
 
 ## 安装
 
