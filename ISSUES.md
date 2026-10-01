@@ -17,23 +17,25 @@ Legend — **P0** functional or security · **P1** documentation that fails when
 
 | | |
 |---|---|
-| Unsettled | P0 0 · P1 1 · P2 5 · P3 1 · other 1 |
-| Settled | 0 of 8 |
-| Waiting on the owner | _nothing_ |
-| Waiting on the reviewer | `P1-1`, `P2-1`, `P2-2`, `P2-3`, `P2-5`, `P3-1`, `G2` |
+| Unsettled | P0 0 · P1 0 · P2 2 · P3 2 · other 0 |
+| Settled | 6 of 10 |
+| Waiting on the owner | `P3-2`, `P3-3` |
 | Waiting on the coordinator | _nothing_ |
+| Waiting on the reviewer | `P2-5` |
 | Deferred, owing nobody | `P2-4` |
 
 | id | level | status | title |
 |---|---|---|---|
-| [`P1-1`](issues/P1-1.md) | P1 | **fixed** | A logger registered in the container is still ignored by the framework: … |
-| [`P2-1`](issues/P2-1.md) | P2 | **fixed** | A 405 response carries no `Allow` header, although … |
-| [`P2-2`](issues/P2-2.md) | P2 | **fixed** | `class_exists($className, false)` is treated as proof the target file … |
-| [`P2-3`](issues/P2-3.md) | P2 | **fixed** | A container factory returning `null` loses singleton semantics: … |
+| [`P1-1`](issues/P1-1.md) | P1 | **verified** | A logger registered in the container is still ignored by the framework: … |
+| [`P2-1`](issues/P2-1.md) | P2 | **verified** | A 405 response carries no `Allow` header, although … |
+| [`P2-2`](issues/P2-2.md) | P2 | **verified** | `class_exists($className, false)` is treated as proof the target file … |
+| [`P2-3`](issues/P2-3.md) | P2 | **verified** | A container factory returning `null` loses singleton semantics: … |
 | [`P2-4`](issues/P2-4.md) | P2 | **deferred** | Route parameters are not URL-decoded: `locate('/users/42%20x')` yields … |
 | [`P2-5`](issues/P2-5.md) | P2 | **rejected** | `Response::send()` validates nothing: no `headers_sent()` check, no … |
-| [`P3-1`](issues/P3-1.md) | P3 | **fixed** | The README describes the lifecycle as 'before → HTTP method → after' … |
-| [`G2`](issues/G2.md) | - | **fixed** | Strict flags: `phpunit.xml.dist` currently sets none of the five. The … |
+| [`P3-1`](issues/P3-1.md) | P3 | **verified** | The README describes the lifecycle as 'before → HTTP method → after' … |
+| [`P3-2`](issues/P3-2.md) | P3 | **open** | README code-size claim is slightly off — states '~700 lines of source' … |
+| [`P3-3`](issues/P3-3.md) | P3 | **open** | MiRest::createResource() relies on autoload to find resource classes — … |
+| [`G2`](issues/G2.md) | - | **verified** | Strict flags: `phpunit.xml.dist` currently sets none of the five. The … |
 
 ## Unclosed
 
@@ -42,20 +44,16 @@ highest severity first. `waiting on` is the party who acts next, read from that 
 
 | | |
 |---|---|
-| Unclosed | **8** of 8 |
-| By status | `rejected` 1 · `deferred` 1 · `fixed` 6 |
-| Waiting on | reviewer 7 · - 1 |
+| Unclosed | **4** of 10 |
+| By status | `open` 2 · `rejected` 1 · `deferred` 1 |
+| Waiting on | owner 2 · reviewer 1 · - 1 |
 
 | level | item | status | waiting on | title |
 |---|---|---|---|---|
-| **P1** | [`P1-1`](issues/P1-1.md) | `fixed` | reviewer | A logger registered in the container is still ignored by the framework: … |
-| **P2** | [`P2-1`](issues/P2-1.md) | `fixed` | reviewer | A 405 response carries no `Allow` header, although … |
-| **P2** | [`P2-2`](issues/P2-2.md) | `fixed` | reviewer | `class_exists($className, false)` is treated as proof the target file … |
-| **P2** | [`P2-3`](issues/P2-3.md) | `fixed` | reviewer | A container factory returning `null` loses singleton semantics: … |
 | **P2** | [`P2-4`](issues/P2-4.md) | `deferred` | - | Route parameters are not URL-decoded: `locate('/users/42%20x')` yields … |
 | **P2** | [`P2-5`](issues/P2-5.md) | `rejected` | reviewer | `Response::send()` validates nothing: no `headers_sent()` check, no … |
-| **P3** | [`P3-1`](issues/P3-1.md) | `fixed` | reviewer | The README describes the lifecycle as 'before → HTTP method → after' … |
-| **-** | [`G2`](issues/G2.md) | `fixed` | reviewer | Strict flags: `phpunit.xml.dist` currently sets none of the five. The … |
+| **P3** | [`P3-2`](issues/P3-2.md) | `open` | owner | README code-size claim is slightly off — states '~700 lines of source' … |
+| **P3** | [`P3-3`](issues/P3-3.md) | `open` | owner | MiRest::createResource() relies on autoload to find resource classes — … |
 
 ## Verdict
 
@@ -96,23 +94,25 @@ No test for Request with duplicate query parameters (last-wins behavior); no tes
 
 | | |
 |---|---|
-| 未了结 | P0 0 · P1 1 · P2 5 · P3 1 · 其他 1 |
-| 已了结 | 0 / 8 |
-| 等负责人 | _无_ |
-| 等评审方 | `P1-1`, `P2-1`, `P2-2`, `P2-3`, `P2-5`, `P3-1`, `G2` |
+| 未了结 | P0 0 · P1 0 · P2 2 · P3 2 · 其他 0 |
+| 已了结 | 6 / 10 |
+| 等模块主 | `P3-2`, `P3-3` |
 | 等协调人 | _无_ |
+| 等评审方 | `P2-5` |
 | 已暂缓，不欠谁 | `P2-4` |
 
 | id | 级别 | 状态 | 标题 |
 |---|---|---|---|
-| [`P1-1`](issues/P1-1.md) | P1 | **fixed** | 容器里注册的 logger 仍被框架忽略：框架自身错误只用构造器第 3 参，而 README 展示了两个不同的 … |
-| [`P2-1`](issues/P2-1.md) | P2 | **fixed** | 405 响应不带 Allow 头，而 getAllowedMethods() 已经产出这份数据且只有 OPTIONS 分支使用。RFC … |
-| [`P2-2`](issues/P2-2.md) | P2 | **fixed** | class_exists($className, false) 被当作「目标文件已加载」的证明。当同层精确目录与通配目录产生同一 FQCN … |
-| [`P2-3`](issues/P2-3.md) | P2 | **fixed** | 容器工厂返回 null 会丢失单例语义：isset($this->instances[$id]) 对 null 为 false，于是每次 … |
+| [`P1-1`](issues/P1-1.md) | P1 | **verified** | 容器里注册的 logger 仍被框架忽略：框架自身错误只用构造器第 3 参，而 README 展示了两个不同的 … |
+| [`P2-1`](issues/P2-1.md) | P2 | **verified** | 405 响应不带 Allow 头，而 getAllowedMethods() 已经产出这份数据且只有 OPTIONS 分支使用。RFC … |
+| [`P2-2`](issues/P2-2.md) | P2 | **verified** | class_exists($className, false) 被当作「目标文件已加载」的证明。当同层精确目录与通配目录产生同一 FQCN … |
+| [`P2-3`](issues/P2-3.md) | P2 | **verified** | 容器工厂返回 null 会丢失单例语义：isset($this->instances[$id]) 对 null 为 false，于是每次 … |
 | [`P2-4`](issues/P2-4.md) | P2 | **deferred** | 路由参数不做 URL 解码：locate("/users/42%20x") 得到字面量 42%20x，而 $_GET … |
 | [`P2-5`](issues/P2-5.md) | P2 | **rejected** | Response::send() 不做任何校验：不检查 headers_sent()、不校验状态码范围、不校验头名——且完全没有测试。 |
-| [`P3-1`](issues/P3-1.md) | P3 | **fixed** | README 把生命周期写成「before → HTTP 方法 → after」，未说明资源级 before() 短路时会跳过资源级 … |
-| [`G2`](issues/G2.md) | - | **fixed** | 严格开关：`phpunit.xml.dist` … |
+| [`P3-1`](issues/P3-1.md) | P3 | **verified** | README 把生命周期写成「before → HTTP 方法 → after」，未说明资源级 before() 短路时会跳过资源级 … |
+| [`P3-2`](issues/P3-2.md) | P3 | **open** | README 代码量声称略有偏差——称「约 700 行源码」，但实测 7 个文件净代码约 499 行。轻微漂移。 |
+| [`P3-3`](issues/P3-3.md) | P3 | **open** | MiRest::createResource() 依赖自动加载来找到资源类——如果类名匹配的文件尚未加载且自动加载静默失败，行为将不可预测。 |
+| [`G2`](issues/G2.md) | - | **verified** | 严格开关：`phpunit.xml.dist` … |
 
 ## 未关闭
 
@@ -121,20 +121,16 @@ No test for Request with duplicate query parameters (last-wins behavior); no tes
 
 | | |
 |---|---|
-| 未关闭 | **8** / 8 |
-| 按状态 | `rejected` 1 · `deferred` 1 · `fixed` 6 |
-| 等在谁 | 评审方 7 · - 1 |
+| 未关闭 | **4** / 10 |
+| 按状态 | `open` 2 · `rejected` 1 · `deferred` 1 |
+| 等在谁 | 模块主 2 · 评审方 1 · - 1 |
 
 | 级别 | 条目 | 状态 | 等在谁 | 标题 |
 |---|---|---|---|---|
-| **P1** | [`P1-1`](issues/P1-1.md) | `fixed` | 评审方 | 容器里注册的 logger 仍被框架忽略：框架自身错误只用构造器第 3 参，而 README 展示了两个不同的 … |
-| **P2** | [`P2-1`](issues/P2-1.md) | `fixed` | 评审方 | 405 响应不带 Allow 头，而 getAllowedMethods() 已经产出这份数据且只有 OPTIONS 分支使用。RFC … |
-| **P2** | [`P2-2`](issues/P2-2.md) | `fixed` | 评审方 | class_exists($className, false) 被当作「目标文件已加载」的证明。当同层精确目录与通配目录产生同一 FQCN … |
-| **P2** | [`P2-3`](issues/P2-3.md) | `fixed` | 评审方 | 容器工厂返回 null 会丢失单例语义：isset($this->instances[$id]) 对 null 为 false，于是每次 … |
 | **P2** | [`P2-4`](issues/P2-4.md) | `deferred` | - | 路由参数不做 URL 解码：locate("/users/42%20x") 得到字面量 42%20x，而 $_GET … |
 | **P2** | [`P2-5`](issues/P2-5.md) | `rejected` | 评审方 | Response::send() 不做任何校验：不检查 headers_sent()、不校验状态码范围、不校验头名——且完全没有测试。 |
-| **P3** | [`P3-1`](issues/P3-1.md) | `fixed` | 评审方 | README 把生命周期写成「before → HTTP 方法 → after」，未说明资源级 before() 短路时会跳过资源级 … |
-| **-** | [`G2`](issues/G2.md) | `fixed` | 评审方 | 严格开关：`phpunit.xml.dist` … |
+| **P3** | [`P3-2`](issues/P3-2.md) | `open` | 模块主 | README 代码量声称略有偏差——称「约 700 行源码」，但实测 7 个文件净代码约 499 行。轻微漂移。 |
+| **P3** | [`P3-3`](issues/P3-3.md) | `open` | 模块主 | MiRest::createResource() 依赖自动加载来找到资源类——如果类名匹配的文件尚未加载且自动加载静默失败，行为将不可预测。 |
 
 ## 结论
 
