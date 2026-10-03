@@ -9,7 +9,7 @@ use Psr\Log\LoggerInterface;
 /**
  * MiRest — a minimalist REST framework.
  *
- * Core feature: directory-as-route. No need to define a route table;
+ * Core feature: file-as-route. No need to define a route table;
  * the filesystem is the route table.
  *
  * It is also the container: register only what needs configuration

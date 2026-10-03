@@ -1,6 +1,6 @@
 {
     "name": "migears/web",
-    "description": "Minimalist REST framework with directory-as-routing",
+    "description": "Minimalist REST framework with file-as-routing",
     "type": "library",
     "license": "MIT",
     "version": "2.2.0",

@@ -2,7 +2,7 @@
 
 ![Version](https://img.shields.io/badge/version-2.2.0-blue)
 
-A minimalist REST framework with directory-as-routing. Zero magic, zero global variables, core code under 600 lines.
+A minimalist REST framework with file-as-routing. Zero magic, zero global variables, core code under 600 lines.
 
 > **Upgrading from 2.1?** This release changes the resource layout and the class
 > naming rule: one file per path (`users.php`, `users/___user_id___.php`) instead
@@ -16,7 +16,7 @@ A minimalist REST framework with directory-as-routing. Zero magic, zero global v
 
 ## Features
 
-- **Directory-as-routing** — The filesystem structure is your API, no routing table configuration needed
+- **File-as-routing** — A file's path is the endpoint it answers, no routing table configuration needed
 - **Lightweight Request/Response** — Custom objects, simpler and more intuitive than PSR-7
 - **PSR-3 / PSR-4 / PSR-11 / PSR-12** — Follows logging, autoloading, container, and coding standards
 - **Minimal dependencies** — Only `psr/container` and `psr/log`
@@ -30,7 +30,7 @@ A minimalist REST framework with directory-as-routing. Zero magic, zero global v
 
 **In scope**
 
-- Directory-as-routing and dispatch: `ResourceLocator` walks the filesystem (`<segment>.php` / `___param___` / `__other__.php`), and `MiRest::handle()` wires global before/after hooks, the 404 and error handlers, and the template method `before` → HTTP verb → `after`.
+- File-as-routing and dispatch: `ResourceLocator` walks the filesystem (`<segment>.php` / `___param___` / `__other__.php`), and `MiRest::handle()` wires global before/after hooks, the 404 and error handlers, and the template method `before` → HTTP verb → `after`.
 - The lightweight `Request` / `Response` objects (`Request::fromGlobals()`, `Response::json` / `html` / `redirect` / `empty`, `send()`) and `AbstractResource`'s HTTP verb handlers, including the `OPTIONS` / `HEAD` defaults and the `405` response with an `Allow` header.
 - The PSR-11 container that `MiRest` itself is (`set()` / `has()` / `get()`, lazy-singleton factories) plus `$this->resolve()` inside resources — it is the composition root that wires the sibling modules together.
 
@@ -359,7 +359,7 @@ MIT
 
 ![Version](https://img.shields.io/badge/version-2.2.0-blue)
 
-极简 REST 框架，目录即路由。零魔法、零全局变量，核心代码不到 600 行。
+极简 REST 框架，文件即路由。零魔法、零全局变量，核心代码不到 600 行。
 
 > **从 2.1 升级？** 本次发布改了资源布局与类名规则：一个路径一个文件
 > （`users.php`、`users/___user_id___.php`），不再是一个目录里放一个 `Index.php`；
@@ -371,7 +371,7 @@ MIT
 
 ## 特性
 
-- **目录即路由** — 文件系统结构就是你的 API，无需配置路由表
+- **文件即路由** — 文件所在的路径就是它所响应的端点，无需配置路由表
 - **轻量 Request/Response** — 自定义对象，比 PSR-7 更简洁直观
 - **PSR-3 / PSR-4 / PSR-11 / PSR-12** — 遵循日志、自动加载、容器、编码规范
 - **依赖极少** — 仅 `psr/container` 与 `psr/log`
@@ -385,7 +385,7 @@ MIT
 
 **范围内**
 
-- 目录即路由与分发：`ResourceLocator` 逐级遍历文件系统（`<segment>.php` / `___param___` / `__other__.php`），`MiRest::handle()` 负责接线全局 before/after 钩子、404 与异常处理器，以及 `before` → HTTP 动词 → `after` 模板方法。
+- 文件即路由与分发：`ResourceLocator` 逐级遍历文件系统（`<segment>.php` / `___param___` / `__other__.php`），`MiRest::handle()` 负责接线全局 before/after 钩子、404 与异常处理器，以及 `before` → HTTP 动词 → `after` 模板方法。
 - 轻量 `Request` / `Response` 对象（`Request::fromGlobals()`、`Response::json` / `html` / `redirect` / `empty`、`send()`），以及 `AbstractResource` 的 HTTP 动词处理器，包括默认 `OPTIONS` / `HEAD` 与带 `Allow` 头的 `405` 响应。
 - `MiRest` 本身就是的 PSR-11 容器（`set()` / `has()` / `get()`，懒加载单例工厂），以及资源内的 `$this->resolve()` —— 它是把各兄弟模块接线到一起的组合根。
 
