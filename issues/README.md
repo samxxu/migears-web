@@ -2,7 +2,7 @@
 id: "README"
 ---
 
-# Issues — migears-migears-web
+# Issues — migears-web
 
 This directory is the record. Each item is one file: `issues/<id>.md`, with a front-matter header the
 tooling owns and an appended thread below the finding. `../ISSUES.md` is only the generated summary of what is here.
@@ -51,7 +51,7 @@ the channel lives.
 
 ---
 
-# Issues — migears-migears-web（中文）
+# Issues — migears-web（中文）
 
 本目录就是记录。每条条目一个文件：`issues/<id>.md`，头部前置字段由工具拥有，问题之下是追加的讨论串。
 `../ISSUES.md` 只是本目录内容的生成概览。
