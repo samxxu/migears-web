@@ -19,8 +19,11 @@ abstract class AbstractResource
      * The HTTP verbs a request may dispatch to.
      *
      * A request whose verb is not on this list is answered with 405 and never
-     * reaches the class: method_exists() is case-insensitive, so without this
-     * guard an internal helper could be invoked as if it were a handler.
+     * calls a handler method. It is not dispatched to the class, but it does
+     * reach it: the resource is already instantiated and its before() runs
+     * first, because the verb is checked only after that hook. This guard keeps
+     * method_exists()'s case-insensitivity from invoking an internal helper as
+     * if it were a handler.
      *
      * @var list<string>
      */
@@ -113,7 +116,8 @@ abstract class AbstractResource
      * This is a template method; subclasses generally do not need to override it.
      *
      * Only the verbs in HTTP_METHODS are dispatchable; anything else is answered
-     * with 405 without consulting the class.
+     * with 405 and calls no handler method. The before() hook above still runs
+     * first, because the verb is checked only after it.
      */
     public function handle(Request $request, string $method): Response
     {

@@ -142,13 +142,16 @@ class MiRest implements ContainerInterface
      *
      * The logger is resolved from the container first, before dispatch starts:
      * a missing or wrong registration must fail loudly here instead of being
-     * hidden behind an internal default. Register LoggerInterface at bootstrap —
+     * hidden behind an internal default. That resolution is deliberate and sits
+     * outside the guards below, so when nothing (or the wrong type) is
+     * registered under LoggerInterface the exception escapes handle() rather
+     * than becoming a response. Register LoggerInterface at bootstrap —
      * NullLogger if you want silence.
      *
      * Dispatch runs next, then the global after hooks run once. Both stages are
-     * guarded, so handle() returns a Response on every path: a throwing after hook
-     * is logged and answered with an error response rather than escaping the
-     * method, and it can never run twice.
+     * guarded, so once the logger is resolved, handle() returns a Response on
+     * every path: a throwing after hook is logged and answered with an error
+     * response rather than escaping the method, and it can never run twice.
      */
     public function handle(Request $request): Response
     {

@@ -1,6 +1,6 @@
 {
     "name": "migears/web",
-    "description": "miGears Web — 极简 REST 框架，目录即路由",
+    "description": "Minimalist REST framework with directory-as-routing",
     "type": "library",
     "license": "MIT",
     "version": "2.1.0",
@@ -12,6 +12,18 @@
         "micro-framework",
         "lightweight"
     ],
+    "homepage": "https://github.com/samxxu/migears-web",
+    "authors": [
+        {
+            "name": "Sam X. Xu",
+            "email": "samxxu@gmail.com",
+            "role": "Developer"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/samxxu/migears-web/issues",
+        "source": "https://github.com/samxxu/migears-web"
+    },
     "require": {
         "php": "^8.1",
         "psr/container": "^2.0",
