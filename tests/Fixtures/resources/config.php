@@ -1,14 +1,13 @@
 <?php
-
 declare(strict_types=1);
 
-namespace MiGears\Web\Tests\Fixtures\Resources\Config;
+namespace MiGears\Web\Tests\Fixtures\Resources;
 
 use MiGears\Web\AbstractResource;
 use MiGears\Web\Request;
 use MiGears\Web\Response;
 
-class Index extends AbstractResource
+class config extends AbstractResource
 {
     public function GET(Request $request): Response
     {

@@ -1,13 +1,13 @@
 <?php
 declare(strict_types=1);
 
-namespace MiGears\Web\Tests\Fixtures\Resources\Users\UserId\Posts;
+namespace MiGears\Web\Tests\Fixtures\Resources\users\___user_id___;
 
 use MiGears\Web\AbstractResource;
 use MiGears\Web\Request;
 use MiGears\Web\Response;
 
-class Index extends AbstractResource
+class posts extends AbstractResource
 {
     public function GET(Request $request): Response
     {

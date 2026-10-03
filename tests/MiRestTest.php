@@ -59,7 +59,7 @@ class MiRestTest extends TestCase
         // With multiple resources, class names collide (documented in README).
         $dir = sys_get_temp_dir() . '/migears-test-nons-' . uniqid();
         mkdir($dir, 0777, true);
-        file_put_contents($dir . '/Index.php', '<?php use MiGears\Web\AbstractResource; use MiGears\Web\Request; use MiGears\Web\Response; class Index extends AbstractResource { public function GET(Request $r): Response { return Response::json(["ok"=>true]); } }');
+        file_put_contents($dir . '/index.php', '<?php use MiGears\Web\AbstractResource; use MiGears\Web\Request; use MiGears\Web\Response; class index extends AbstractResource { public function GET(Request $r): Response { return Response::json(["ok"=>true]); } }');
         try {
             $rest = $this->rest($dir, '');
             $response = $rest->handle(new Request('GET', '/'));
@@ -67,7 +67,32 @@ class MiRestTest extends TestCase
             $data = json_decode($response->body, true);
             $this->assertTrue($data['ok']);
         } finally {
-            unlink($dir . '/Index.php');
+            unlink($dir . '/index.php');
+            rmdir($dir);
+        }
+    }
+
+    public function testAResourceNamedAfterAPhpKeywordIsReportedReadably(): void
+    {
+        // A resource file name is also its class name, so `new` cannot be a
+        // resource: `class new {}` is a parse error. That must surface as a
+        // readable message and not as a blank 500.
+        $dir = sys_get_temp_dir() . '/migears-keyword-' . uniqid();
+        mkdir($dir, 0777, true);
+        file_put_contents($dir . '/new.php', "<?php\nnamespace Anything;\nclass new extends \\MiGears\\Web\\AbstractResource {}\n");
+
+        try {
+            $rest = $this->rest($dir, 'Anything');
+            $rest->error(fn(\Throwable $e) => Response::json(['message' => $e->getMessage()], 500));
+
+            $response = $rest->handle(new Request('GET', '/new'));
+
+            $this->assertSame(500, $response->status);
+            $message = json_decode($response->body, true)['message'];
+            $this->assertStringContainsString('cannot be parsed', $message);
+            $this->assertStringContainsString('keyword', $message);
+        } finally {
+            unlink($dir . '/new.php');
             rmdir($dir);
         }
     }
@@ -83,7 +108,7 @@ class MiRestTest extends TestCase
     public function testTraversalRequestResolvesInsideBaseDir(): void
     {
         $rest = $this->rest();
-        // '..' is dropped, so the request hits Users/Index inside the base dir
+        // '..' is dropped, so the request hits users.php inside the base dir
         $response = $rest->handle(new Request('GET', '/../users'));
         $this->assertSame(200, $response->status);
         $data = json_decode($response->body, true);
@@ -195,50 +220,43 @@ class MiRestTest extends TestCase
         $this->assertSame('42%20x', $data['id']);
     }
 
-    public function testExactAndWildcardDirectoriesCannotSilentlyShareAClass(): void
+    public function testAnExactSegmentAndAWildcardNoLongerShareAClassName(): void
     {
-        // Users/UserId/ and Users/___user_id___/ both map to the same FQCN
-        // (...\Users\UserId\Index). Only one of the two files can ever be loaded,
-        // so once the exact one is in memory the wildcard request must not answer
-        // with the exact file's implementation as if nothing were wrong.
-        $suffix = uniqid('collision');
+        // The file name is the class name, so users/user_id.php declares
+        // `user_id` while users/___user_id___.php declares `___user_id___`. The
+        // two can no longer collide, and each request is answered by its own file.
+        $suffix = uniqid('noclash');
         $ns = 'MiGears\\Web\\Tests\\' . $suffix;
-        $dir = sys_get_temp_dir() . '/migears-collision-' . $suffix;
-        mkdir($dir . '/Users/UserId', 0777, true);
-        mkdir($dir . '/Users/___user_id___', 0777, true);
+        $dir = sys_get_temp_dir() . '/migears-noclash-' . $suffix;
+        mkdir($dir . '/users', 0777, true);
 
         $template = <<<'PHP'
 <?php
-namespace %s\Users\UserId;
+namespace %s\users;
 use MiGears\Web\AbstractResource;
 use MiGears\Web\Request;
 use MiGears\Web\Response;
-class Index extends AbstractResource {
+class %s extends AbstractResource {
     public function GET(Request $r): Response { return Response::json(['from' => '%s']); }
 }
 PHP;
-        file_put_contents($dir . '/Users/UserId/Index.php', sprintf($template, $ns, 'exact'));
-        file_put_contents($dir . '/Users/___user_id___/Index.php', sprintf($template, $ns, 'wildcard'));
+        file_put_contents($dir . '/users/user_id.php', sprintf($template, $ns, 'user_id', 'exact'));
+        file_put_contents($dir . '/users/___user_id___.php', sprintf($template, $ns, '___user_id___', 'wildcard'));
 
         try {
             $rest = $this->rest($dir, $ns);
 
-            // Exact directory: /users/user_id → Users/UserId (loads the class)
             $exact = $rest->handle(new Request('GET', '/users/user_id'));
             $this->assertSame(200, $exact->status);
             $this->assertSame('exact', json_decode($exact->body, true)['from']);
 
-            // Wildcard directory: /users/999 → Users/___user_id___ (same FQCN).
-            // The ambiguous setup is reported, not resolved in silence.
             $wildcard = $rest->handle(new Request('GET', '/users/999'));
-            $this->assertSame(500, $wildcard->status);
-            $this->assertNotSame('exact', json_decode($wildcard->body, true)['from'] ?? null);
+            $this->assertSame(200, $wildcard->status);
+            $this->assertSame('wildcard', json_decode($wildcard->body, true)['from']);
         } finally {
-            unlink($dir . '/Users/UserId/Index.php');
-            unlink($dir . '/Users/___user_id___/Index.php');
-            rmdir($dir . '/Users/UserId');
-            rmdir($dir . '/Users/___user_id___');
-            rmdir($dir . '/Users');
+            unlink($dir . '/users/user_id.php');
+            unlink($dir . '/users/___user_id___.php');
+            rmdir($dir . '/users');
             rmdir($dir);
         }
     }
@@ -253,26 +271,26 @@ PHP;
         $ns = 'MiGears\\Web\\Tests\\' . $suffix;
         $dir = sys_get_temp_dir() . '/migears-noload-' . $suffix;
         $elsewhere = sys_get_temp_dir() . '/migears-elsewhere-' . $suffix;
-        mkdir($dir . '/Foo', 0777, true);
-        mkdir($elsewhere . '/Foo', 0777, true);
+        mkdir($dir, 0777, true);
+        mkdir($elsewhere, 0777, true);
 
-        file_put_contents($dir . '/Foo/Index.php', "<?php\n// declares no class\n");
+        file_put_contents($dir . '/foo.php', "<?php\n// declares no class\n");
 
         $template = <<<'PHP'
 <?php
-namespace %s\Foo;
+namespace %s;
 use MiGears\Web\AbstractResource;
 use MiGears\Web\Request;
 use MiGears\Web\Response;
-class Index extends AbstractResource {
+class foo extends AbstractResource {
     public function GET(Request $r): Response { return Response::json(['from' => 'elsewhere']); }
 }
 PHP;
-        file_put_contents($elsewhere . '/Foo/Index.php', sprintf($template, $ns));
+        file_put_contents($elsewhere . '/foo.php', sprintf($template, $ns));
 
         $autoload = static function (string $class) use ($ns, $elsewhere): void {
-            if ($class === $ns . '\\Foo\\Index') {
-                require $elsewhere . '/Foo/Index.php';
+            if ($class === $ns . '\\foo') {
+                require $elsewhere . '/foo.php';
             }
         };
         spl_autoload_register($autoload);
@@ -285,11 +303,9 @@ PHP;
             $this->assertNotSame('elsewhere', json_decode($response->body, true)['from'] ?? null);
         } finally {
             spl_autoload_unregister($autoload);
-            unlink($dir . '/Foo/Index.php');
-            rmdir($dir . '/Foo');
+            unlink($dir . '/foo.php');
             rmdir($dir);
-            unlink($elsewhere . '/Foo/Index.php');
-            rmdir($elsewhere . '/Foo');
+            unlink($elsewhere . '/foo.php');
             rmdir($elsewhere);
         }
     }
@@ -317,7 +333,7 @@ PHP;
     public function testMethodNotAllowed(): void
     {
         $rest = $this->rest();
-        // users/Index does not implement patch
+        // users.php does not implement patch
         $response = $rest->handle(new Request('PATCH', '/users'));
         $this->assertSame(405, $response->status);
     }
@@ -325,7 +341,7 @@ PHP;
     public function testOptionsViaFrameworkReturnsAllowHeader(): void
     {
         $rest = $this->rest();
-        // /users Index implements GET + POST
+        // /users implements GET + POST
         $response = $rest->handle(new Request('OPTIONS', '/users'));
         $this->assertSame(204, $response->status);
         $this->assertStringContainsString('GET', $response->headers['Allow']);
@@ -507,7 +523,7 @@ PHP;
 
     // --- CatchAll tests ---
 
-    public function testCatchAllResource(): void
+    public function testCatchAll(): void
     {
         $rest = $this->rest();
         $response = $rest->handle(new Request('GET', '/catchall/any/path'));

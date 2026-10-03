@@ -1,13 +1,13 @@
 <?php
 declare(strict_types=1);
 
-namespace MiGears\Web\Tests\Fixtures\Resources\Catchall;
+namespace MiGears\Web\Tests\Fixtures\Resources\catchall;
 
 use MiGears\Web\AbstractResource;
 use MiGears\Web\Request;
 use MiGears\Web\Response;
 
-class CatchAllResource extends AbstractResource
+class __other__ extends AbstractResource
 {
     public function GET(Request $request): Response
     {

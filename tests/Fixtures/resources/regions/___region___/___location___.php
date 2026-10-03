@@ -1,14 +1,13 @@
 <?php
-
 declare(strict_types=1);
 
-namespace MiGears\Web\Tests\Fixtures\Resources\Regions\Region\Location;
+namespace MiGears\Web\Tests\Fixtures\Resources\regions\___region___;
 
 use MiGears\Web\AbstractResource;
 use MiGears\Web\Request;
 use MiGears\Web\Response;
 
-class Index extends AbstractResource
+class ___location___ extends AbstractResource
 {
     public function GET(Request $request): Response
     {

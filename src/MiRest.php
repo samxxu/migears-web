@@ -28,7 +28,7 @@ use Psr\Log\LoggerInterface;
  */
 class MiRest implements ContainerInterface
 {
-    public const VERSION = '2.1.0';
+    public const VERSION = '2.2.0';
 
     private ResourceLocator $locator;
 
@@ -273,19 +273,31 @@ class MiRest implements ContainerInterface
     /**
      * Load the resource class declared in the file the locator found.
      *
-     * class_exists($name, false) alone only says that *some* file has already
-     * declared the class; it does not say the file we just located did. An exact
-     * directory and a wildcard directory on the same level can map to the same
-     * FQCN (e.g. `Users/UserId/` and `Users/___user_id___/` both produce
-     * `...\Users\UserId\Index`), and then the second request would silently reuse
-     * the first file's implementation. The loaded class must therefore come from
-     * $filePath; anything else is an ambiguous routing setup, and it is reported
+     * The located file has to be the one that declares the class. Falling back to
+     * the autoloader would answer the route with a class from a file the locator
+     * never found, and class_exists($name, false) alone only says that *some*
+     * file has already declared the class. Loading the wrong one is reported
      * rather than papered over.
+     *
+     * A resource file name doubles as its class name, so a segment that is a PHP
+     * keyword (`/new`, `/list`, `/match`) makes the file a parse error. That
+     * ParseError is turned into a readable message instead of a blank 500.
      */
     private function loadResourceClass(string $className, string $filePath): void
     {
         if (!class_exists($className, false)) {
-            require_once $filePath;
+            try {
+                require_once $filePath;
+            } catch (\ParseError $e) {
+                throw new \RuntimeException(
+                    "The resource file {$filePath} cannot be parsed. A resource file name is also its class "
+                    . "name, so a PHP keyword such as /new, /list, /class or /match is rejected by the parser; "
+                    . "rename the resource (the plural form works: /news, /lists, /classes). "
+                    . "Parser: {$e->getMessage()}",
+                    0,
+                    $e
+                );
+            }
 
             // The located file has to be the one that declares the class. Falling
             // back to the autoloader here would answer the route with a class from

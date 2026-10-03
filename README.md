@@ -1,8 +1,14 @@
 # migears/web
 
-![Version](https://img.shields.io/badge/version-2.1.0-blue)
+![Version](https://img.shields.io/badge/version-2.2.0-blue)
 
-A minimalist REST framework with directory-as-routing. Zero magic, zero global variables, core code under 500 lines.
+A minimalist REST framework with directory-as-routing. Zero magic, zero global variables, core code under 600 lines.
+
+> **Upgrading from 2.1?** This release changes the resource layout and the class
+> naming rule: one file per path (`users.php`, `users/___user_id___.php`) instead
+> of a directory holding an `Index.php`, and a resource file's name is now also
+> its class name. Every existing `resources/` tree has to be renamed — see
+> [Routing Rules](#routing-rules).
 
 > **Background**: miGears is the open-source successor of **TinyGears**, a
 > self-developed PHP framework. It was renamed and open-sourced recently because
@@ -14,17 +20,17 @@ A minimalist REST framework with directory-as-routing. Zero magic, zero global v
 - **Lightweight Request/Response** — Custom objects, simpler and more intuitive than PSR-7
 - **PSR-3 / PSR-4 / PSR-11 / PSR-12** — Follows logging, autoloading, container, and coding standards
 - **Minimal dependencies** — Only `psr/container` and `psr/log`
-- **Under 500 lines of code** — Comments and blank lines excluded, so it stays true as the documentation grows; read the entire framework in one sitting
-- **No global variables, no singletons** — Fully testable and injectable
+- **Under 600 lines of code** — Comments and blank lines excluded, so it stays true as the documentation grows; read the entire framework in one sitting
+- **No global variables, no process-wide static singletons** — Fully testable and injectable; the container is per-instance, and an entry is shared only for the lifetime of that one `MiRest` (the lazy singleton described below)
 - **Built-in container, PSR-11** — Register only what needs configuration (PDO, Redis, Logger, DAOs, Managers); everything else is just `new`
 - **`before()` / `after()` hooks** — Lightweight middleware alternative
-- **`___param___` wildcard directories** — Capture URL segments as named parameters
+- **`___param___` wildcard segments** — Capture URL segments as named parameters
 
 ## Boundaries
 
 **In scope**
 
-- Directory-as-routing and dispatch: `ResourceLocator` walks the filesystem (`Index.php` / `___param___` / `CatchAllResource.php`), and `MiRest::handle()` wires global before/after hooks, the 404 and error handlers, and the template method `before` → HTTP verb → `after`.
+- Directory-as-routing and dispatch: `ResourceLocator` walks the filesystem (`<segment>.php` / `___param___` / `__other__.php`), and `MiRest::handle()` wires global before/after hooks, the 404 and error handlers, and the template method `before` → HTTP verb → `after`.
 - The lightweight `Request` / `Response` objects (`Request::fromGlobals()`, `Response::json` / `html` / `redirect` / `empty`, `send()`) and `AbstractResource`'s HTTP verb handlers, including the `OPTIONS` / `HEAD` defaults and the `405` response with an `Allow` header.
 - The PSR-11 container that `MiRest` itself is (`set()` / `has()` / `get()`, lazy-singleton factories) plus `$this->resolve()` inside resources — it is the composition root that wires the sibling modules together.
 
@@ -49,35 +55,34 @@ Requires: PHP 8.1+, `psr/container`, `psr/log`.
 
 ```
 resources/
-  Index.php              # GET /
-  Users/
-    Index.php            # GET /users, POST /users
+  index.php                  # GET /
+  users.php                  # GET /users, POST /users
+  users/
+    ___user_id___.php        # GET /users/{user_id}, PUT /users/{user_id}, DELETE /users/{user_id}
     ___user_id___/
-      Index.php          # GET /users/{user_id}, PUT /users/{user_id}, DELETE /users/{user_id}
-      Posts/
-        Index.php        # GET /users/{user_id}/posts
-  Catchall/
-    CatchAllResource.php # Fallback match for /catchall/*
+      posts.php              # GET /users/{user_id}/posts
+  catchall/
+    __other__.php            # Fallback match for /catchall/*
 ```
 
 ### 2. Write Resource Class
 
-The class name and namespace have to match the path. The file below lives at
-`resources/Users/___user_id___/Index.php` and the bootstrap uses `namespace: 'App\\Resources'`,
-so the class is `App\Resources\Users\UserId\Index` — a wildcard directory contributes its own name
-in StudlyCase as a namespace segment (`___user_id___` → `UserId`).
+The class name is the file name. The file below lives at
+`resources/users/___user_id___.php` and the bootstrap uses `namespace: 'App\\Resources'`,
+so the class is `App\Resources\users\___user_id___` — the directories contribute
+their names verbatim, with no case conversion.
 
 ```php
 <?php
-// resources/Users/___user_id___/Index.php
+// resources/users/___user_id___.php
 
-namespace App\Resources\Users\UserId;
+namespace App\Resources\users;
 
 use MiGears\Web\AbstractResource;
 use MiGears\Web\Request;
 use MiGears\Web\Response;
 
-class Index extends AbstractResource
+class ___user_id___ extends AbstractResource
 {
     public function GET(Request $request): Response
     {
@@ -138,7 +143,7 @@ MiRest **is** the container: register only what needs configuration (PDO, Redis,
 - **Register only what needs configuration** — the container exists for objects with setup (DSNs, hosts, credentials). Pure value objects (Request, Response, Domains, ...) are simply `new`'d in place.
 - **Closure-based, lazy factories** — each entry is a factory closure. It is **not** executed until first requested, and its result is cached.
 - **One instance per entry** — every entry resolves to one shared instance for the lifetime of the `MiRest` object.
-- **Opt-in, no auto-wiring** — there is no reflection and no magical resolution; an entry must be registered explicitly to be used. Explicit beats magical: this keeps the whole container under ~40 lines and instantly readable.
+- **Opt-in, no auto-wiring** — the container does no reflection-based auto-wiring and no magical resolution; an entry must be registered explicitly to be used. Explicit beats magical: this keeps the whole container under ~40 lines and instantly readable. (The package's only use of reflection is elsewhere: detecting which HTTP verbs a resource declares, feeding the `OPTIONS` default and the `405` `Allow` header.)
 - **No globals, no static** — the container lives on the `MiRest` instance and is handed to every resource.
 
 ### The whole API: three methods
@@ -163,7 +168,7 @@ $rest->get(PDO::class);   // 2nd call returns the SAME cached instance
 $rest->get('missing');    // throws NotFoundException — an unregistered id is an assembly mistake
 ```
 
-`get()` throwing is PSR-11's requirement rather than a style choice: a typo or a forgotten registration must fail where it is asked for, instead of surfacing later as a `null` that "is not an object". Probing for something optional is what `has()` is for. `NotFoundException` is also a `RuntimeException`, and it is not `ResourceNotFoundException` — that one means "no resource matched this path" (a 404), this one means "the application was not wired correctly" (a 500).
+`get()` throwing is PSR-11's requirement rather than a style choice: a typo or a forgotten registration must fail where it is asked for, instead of surfacing later as a `null` that "is not an object". Probing for something optional is what `has()` is for. `NotFoundException` is also a `RuntimeException`, and it is not `ResourceNotFoundException` — that one means "no resource matched this path" (a 404), this one means "the application was not wired correctly", and since the container entries are resolved before dispatch, such a failure is thrown out of `handle()` rather than answered with a 500 response.
 
 Re-registering with `set()` replaces the factory **and drops the cached instance**, so the next `get()` builds a fresh object — handy for redeploy/rebuild or tests.
 
@@ -208,32 +213,42 @@ $rest->set(RedisCache::class,            fn() => new RedisCache(new Redis()));
 **Rule of thumb**: needs configuration → register via `set()`.
 Needs nothing → just `new`. Either way your code never depends on container magic.
 
-> **Note on the `namespace` parameter**: Each resource file declares a class (usually `Index` or `CatchAllResource`). If `namespace` is empty, all resource classes live in the global scope and will collide as soon as you have more than one resource — you will get a *"Cannot redeclare class"* fatal error. Always set a namespace for any project with more than one resource file.
+> **Note on the `namespace` parameter**: Each resource file declares a class whose name is the file name (`users.php` → `class users`). If `namespace` is empty, all resource classes live in the global scope and will collide as soon as you have more than one resource — you will get a *"Cannot redeclare class"* fatal error. Always set a namespace for any project with more than one resource file.
 
 ## Routing Rules
 
-For a request path `/foo/bar/baz`, the locator descends level by level:
+A resource file is named after the path it answers: `/users` is `users.php`, and
+`/users/42` is `users/___user_id___.php`. Nothing is case-converted — the file
+name is the path, and the class name is the file name.
 
-1. **Exact directory match** — If a `Foo/` directory exists, enter it and continue matching `bar/baz`
-2. **Wildcard parameter** — If a `___*___/` directory exists, use the first one, capture the current segment as a parameter, and continue
-3. **CatchAll fallback** — If the current directory has `CatchAllResource.php`, match all remaining paths
-4. **404** — If none of the above match, return 404
+For a request path `/foo/bar/baz`, the locator descends level by level. At each
+level, with `foo` as the current segment:
 
-After the path is fully traversed, resource files are looked up in the following order:
-- `Index.php` — Index resource for the current directory
-- `CatchAllResource.php` — Catch-all resource
+1. **`foo.php`** — when `foo` ends the path, this file answers it
+2. **`foo/`** — when more path follows, the directory is entered and matching continues with `bar/baz`
+3. **`___name___.php`** — a wildcard file, when the segment ends the path: any segment matches and is captured as `name`
+4. **`___name___/`** — a wildcard directory, when more path follows
+5. **`__other__.php`** — a catch-all declared at this level answers the current segment and everything after it; its tail arrives in `$this->remaining`
+6. **404** — if none of the above match, return 404
 
-Finally, the located resource serves the request through the template method `handle()` (`before` → HTTP method → `after`), so **hooks run consistently** whether or not extra path segments matched. A catch-all resource receives any unmatched remaining segments via `$this->remaining`.
+A file and a directory of the same name coexist happily: `users.php` is the
+collection, `users/` holds its members.
+
+Finally, the located resource serves the request through the template method `handle()` (`before` → HTTP method → `after`), so **hooks run consistently** whether or not extra path segments matched.
 
 > **Note on short-circuiting**: If the resource-level `before()` returns a `Response`, the request short-circuits — **neither the HTTP method nor the resource-level `after()` runs**. The global `after` hooks registered on `MiRest` still execute, because they wrap the entire dispatch.
 
-Once located, the HTTP verb decides what runs: the handler the resource declares, or `405 Method Not Allowed` when it declares none — the 405 response always carries an `Allow` header listing the supported methods (RFC 9110). A request whose verb is not an HTTP method gets the same 405 without ever reaching the class, so the resource's own helpers can never be invoked as handlers. The default `OPTIONS()` reports what the resource supports through an `Allow` header.
+Once located, the HTTP verb decides what runs: the handler the resource declares, or `405 Method Not Allowed` when it declares none — the 405 response always carries an `Allow` header listing the supported methods (RFC 9110). A request whose verb is not an HTTP method gets the same 405 and never calls a handler method, so the resource's own helpers can never be invoked as handlers; note though that the resource is still instantiated and its `before()` runs before the 405 is decided. The default `OPTIONS()` reports what the resource supports through an `Allow` header.
 
-URL segments are automatically converted to StudlyCase to match directory names (`/users` → `Users`, `/blog_posts` → `BlogPosts`). `.` / `..` segments are ignored, so the locator can never escape the resource root; `baseDir` must be an existing directory or an `InvalidArgumentException` is thrown.
+Matching lowercases the URL segment, so `/Users` and `/users` reach the same file — nothing else is rewritten, so `-` and `_` are *not* interchangeable and the URL has to match the file name (`/blog_posts` only reaches `blog_posts.php`). `.` / `..` segments are dropped, and a segment carrying a backslash or a NUL byte is refused outright, so the locator can never escape the resource root; `baseDir` must be an existing directory or an `InvalidArgumentException` is thrown.
 
-**Wildcard vs exact directories on the same level**: an exact directory (e.g. `Users/`) always takes priority over a wildcard directory (e.g. `___id___/`). If both exist at the same path depth, the exact match wins — the wildcard is never reached. This is intentional: explicit routes should not be shadowed by parameter captures.
+**Wildcard vs exact on the same level**: an exact `foo.php` / `foo/` always takes priority over a wildcard. If both exist at the same depth, the exact match wins — the wildcard is never reached. This is intentional: explicit routes should not be shadowed by parameter captures.
 
-**Route parameters keep their raw URL encoding**: values captured from `___param___` directories are passed through as-is (e.g. `hello%20world` stays `hello%20world`). Use `urldecode($this->param('name'))` when you need the decoded value. This is intentional — keeping raw encoding provides an extra layer of protection against path-traversal variants like `%2e%2e`.
+**Route parameters keep their raw URL encoding**: values captured from a `___param___` file or directory are passed through as-is (e.g. `hello%20world` stays `hello%20world`). Use `urldecode($this->param('name'))` when you need the decoded value. This is intentional — keeping raw encoding provides an extra layer of protection against path-traversal variants like `%2e%2e`.
+
+> **A file name is a class name**, so a segment that is a PHP keyword cannot be a resource: `/new` would need `class new {}`, which the parser rejects. Use the plural (`/news`, `/lists`, `/classes`) or another wording — the framework reports that parse error with the file name and the reason.
+
+> **Keep `resources/` outside the document root.** The root resource is literally called `index.php`, which is also the web server's default document name; if the directory sits under the docroot, a request for it can be executed directly, bypassing the framework.
 
 ## API Reference
 
@@ -306,9 +321,14 @@ MIT
 
 # migears/web
 
-![Version](https://img.shields.io/badge/version-2.1.0-blue)
+![Version](https://img.shields.io/badge/version-2.2.0-blue)
 
-极简 REST 框架，目录即路由。零魔法、零全局变量，核心代码不到 500 行。
+极简 REST 框架，目录即路由。零魔法、零全局变量，核心代码不到 600 行。
+
+> **从 2.1 升级？** 本次发布改了资源布局与类名规则：一个路径一个文件
+> （`users.php`、`users/___user_id___.php`），不再是一个目录里放一个 `Index.php`；
+> 资源文件的文件名现在就是它的类名。所有既有的 `resources/` 树都必须改名——
+> 见[路由规则](#路由规则)。
 
 > **背景**：miGears 源自自研 PHP 框架 **TinyGears**，因 TinyGears 这一名字
 > 已被开源社区占用，故近期更名并开源发布。
@@ -319,17 +339,17 @@ MIT
 - **轻量 Request/Response** — 自定义对象，比 PSR-7 更简洁直观
 - **PSR-3 / PSR-4 / PSR-11 / PSR-12** — 遵循日志、自动加载、容器、编码规范
 - **依赖极少** — 仅 `psr/container` 与 `psr/log`
-- **代码不到 500 行** — 不计注释与空行，因此文档怎么长都不会让这句话失真；一口气读完整个框架
-- **无全局变量、无单例** — 完全可测试、可注入
+- **代码不到 600 行** — 不计注释与空行，因此文档怎么长都不会让这句话失真；一口气读完整个框架
+- **无全局变量、无进程级静态单例** — 完全可测试、可注入；容器是每实例的，条目只在那一个 `MiRest` 的生命周期内共享（即下文的懒加载单例）
 - **内置容器，PSR-11** — 只注册需要配置的部分（PDO、Redis、Logger、DAO、Manager），其他直接 `new`
 - **`before()` / `after()` 钩子** — 轻量级中间件替代方案
-- **`___param___` 通配符目录** — 捕获 URL 段作为命名参数
+- **`___param___` 通配符段** — 捕获 URL 段作为命名参数
 
 ## 边界
 
 **范围内**
 
-- 目录即路由与分发：`ResourceLocator` 逐级遍历文件系统（`Index.php` / `___param___` / `CatchAllResource.php`），`MiRest::handle()` 负责接线全局 before/after 钩子、404 与异常处理器，以及 `before` → HTTP 动词 → `after` 模板方法。
+- 目录即路由与分发：`ResourceLocator` 逐级遍历文件系统（`<segment>.php` / `___param___` / `__other__.php`），`MiRest::handle()` 负责接线全局 before/after 钩子、404 与异常处理器，以及 `before` → HTTP 动词 → `after` 模板方法。
 - 轻量 `Request` / `Response` 对象（`Request::fromGlobals()`、`Response::json` / `html` / `redirect` / `empty`、`send()`），以及 `AbstractResource` 的 HTTP 动词处理器，包括默认 `OPTIONS` / `HEAD` 与带 `Allow` 头的 `405` 响应。
 - `MiRest` 本身就是的 PSR-11 容器（`set()` / `has()` / `get()`，懒加载单例工厂），以及资源内的 `$this->resolve()` —— 它是把各兄弟模块接线到一起的组合根。
 
@@ -354,35 +374,33 @@ composer require migears/web
 
 ```
 resources/
-  Index.php              # GET /
-  Users/
-    Index.php            # GET /users, POST /users
+  index.php                  # GET /
+  users.php                  # GET /users, POST /users
+  users/
+    ___user_id___.php        # GET /users/{user_id}, PUT /users/{user_id}, DELETE /users/{user_id}
     ___user_id___/
-      Index.php          # GET /users/{user_id}, PUT /users/{user_id}, DELETE /users/{user_id}
-      Posts/
-        Index.php        # GET /users/{user_id}/posts
-  Catchall/
-    CatchAllResource.php # 兜底匹配 /catchall/*
+      posts.php              # GET /users/{user_id}/posts
+  catchall/
+    __other__.php            # 兜底匹配 /catchall/*
 ```
 
 ### 2. 编写资源类
 
-类名与命名空间必须和路径对得上。下面的文件在 `resources/Users/___user_id___/Index.php`，
+类名就是文件名。下面的文件在 `resources/users/___user_id___.php`，
 bootstrap 里用的是 `namespace: 'App\\Resources'`，所以类名是
-`App\Resources\Users\UserId\Index` —— 通配目录会以自己的 StudlyCase 形式贡献一个命名空间段
-（`___user_id___` → `UserId`）。
+`App\Resources\users\___user_id___` —— 各级目录名原样作为命名空间段，不做任何大小写转换。
 
 ```php
 <?php
-// resources/Users/___user_id___/Index.php
+// resources/users/___user_id___.php
 
-namespace App\Resources\Users\UserId;
+namespace App\Resources\users;
 
 use MiGears\Web\AbstractResource;
 use MiGears\Web\Request;
 use MiGears\Web\Response;
 
-class Index extends AbstractResource
+class ___user_id___ extends AbstractResource
 {
     public function GET(Request $request): Response
     {
@@ -445,7 +463,7 @@ MiRest **本身就是**容器：只注册需要配置的东西（PDO、Redis、L
 - **只注册需要配置的部分** — 容器存在的意义是有配置需求的对象（DSN、主机、账号密码）。纯粹的值对象（Request、Response、Domain 等）就地 `new` 即可。
 - **闭包工厂、懒加载** — 每个条目都是一个工厂闭包，**首次被请求时才执行**，结果会被缓存。
 - **一个条目一个实例** — 每个条目在 `MiRest` 对象生命周期内只解析出一个共享实例。
-- **显式登记，不做自动装配** — 没有反射、没有魔法解析；想用某个条目必须显式 `set()`。显式优于魔法：这让整个容器保持在 40 行以内，可一口气读懂。
+- **显式登记，不做自动装配** — 容器不做基于反射的自动装配、没有魔法解析；想用某个条目必须显式 `set()`。显式优于魔法：这让整个容器保持在 40 行以内，可一口气读懂。（本包唯一的反射用途在别处：探测资源声明了哪些 HTTP 动词，供 `OPTIONS` 默认实现与 `405` 的 `Allow` 头使用。）
 - **无全局、无静态** — 容器挂在 `MiRest` 实例上，随框架注入到每个资源。
 
 ### 全部 API 只有三个方法
@@ -474,7 +492,8 @@ $rest->get('missing');    // 抛 NotFoundException —— 未注册的 id 属于
 `get()` 会抛不是风格选择，而是 PSR-11 的要求：拼错或漏注册必须在要它的地方失败，
 而不是过一阵子以「某个 `null` 不是对象」的形式冒出来。要探测可有可无的东西，用 `has()`。
 `NotFoundException` 同时也是 `RuntimeException`；它不是 `ResourceNotFoundException` ——
-后者是「没有资源匹配这个路径」（404），前者是「应用没装配对」（500）。
+后者是「没有资源匹配这个路径」（404），前者是「应用没装配对」，而且由于容器条目在分发之前解析，
+这种失败会从 `handle()` 抛出，而不是被回应成一个 500 响应。
 
 重新 `set()` 会替换工厂**并丢弃已缓存的实例**，下次 `get()` 会构建全新对象 —— 适合重新部署或测试场景。
 
@@ -518,32 +537,39 @@ $rest->set(RedisCache::class,            fn() => new RedisCache(new Redis()));
 
 **经验法则**：需要配置 → 用 `set()` 注册。不需要配置 → 直接 `new`。无论哪种方式，你的业务代码都不依赖容器的任何魔法。
 
-> **关于 `namespace` 参数**：每个资源文件都声明了一个类（通常是 `Index` 或 `CatchAllResource`）。如果 `namespace` 为空，所有资源类都在全局作用域，一旦有两个以上资源就会类名冲突，报 *"Cannot redeclare class"* 致命错误。任何有多个资源文件的项目都应设置 namespace。
+> **关于 `namespace` 参数**：每个资源文件声明的类名就是文件名（`users.php` → `class users`）。如果 `namespace` 为空，所有资源类都在全局作用域，一旦有两个以上资源就会类名冲突，报 *"Cannot redeclare class"* 致命错误。任何有多个资源文件的项目都应设置 namespace。
 
 ## 路由规则
 
-对于请求路径 `/foo/bar/baz`，定位器逐级下降：
+资源文件以它所响应的路径命名：`/users` 是 `users.php`，`/users/42` 是
+`users/___user_id___.php`。全程不做大小写转换——文件名就是路径，类名就是文件名。
 
-1. **精确目录匹配** — 如果存在 `Foo/` 目录，进入并继续匹配 `bar/baz`
-2. **通配符参数** — 如果存在 `___*___/` 目录，使用第一个，捕获当前段为参数，继续
-3. **CatchAll 兜底** — 如果当前目录有 `CatchAllResource.php`，匹配所有剩余路径
-4. **404** — 以上都不匹配，返回 404
+对于请求路径 `/foo/bar/baz`，定位器逐级下降。每一级以 `foo` 为当前段：
 
-路径走完后，按以下顺序查找资源文件：
-- `Index.php` — 当前目录的索引资源
-- `CatchAllResource.php` — 兜底资源
+1. **`foo.php`** — 当 `foo` 是最后一段时，由该文件响应
+2. **`foo/`** — 后面还有路径时，进入该目录，继续匹配 `bar/baz`
+3. **`___name___.php`** — 通配文件，用于最后一段：任意段都匹配，并捕获为 `name`
+4. **`___name___/`** — 通配目录，用于后面还有路径时
+5. **`__other__.php`** — 声明在本层的兜底资源，响应当前段及其后的全部路径；其尾巴通过 `$this->remaining` 传入
+6. **404** — 以上都不匹配，返回 404
 
-最终，定位到的资源统一通过模板方法 `handle()`（`before` → HTTP 方法 → `after`）处理请求，因此**无论是否有多余路径段，前置/后置钩子行为一致**。兜底资源可通过 `$this->remaining` 拿到未匹配的剩余路径段。
+同名的文件与目录可以并存：`users.php` 是集合本身，`users/` 装它的下级。
+
+最终，定位到的资源统一通过模板方法 `handle()`（`before` → HTTP 方法 → `after`）处理请求，因此**无论是否有多余路径段，前置/后置钩子行为一致**。
 
 > **短路说明**：资源级 `before()` 返回 `Response` 时请求短路——**HTTP 方法和资源级 `after()` 都不会执行**。但注册在 `MiRest` 上的全局 `after` 钩子仍会执行（它们包裹整个分发过程）。
 
-定位到资源之后，由 HTTP 动词决定执行什么：资源声明了就执行对应处理器，没声明则返回 `405 Method Not Allowed`——405 响应始终携带列出支持方法的 `Allow` 头（RFC 9110）。不是 HTTP 动词的请求同样得到 405，而且根本不会进入类内部，因此资源自己的辅助方法不可能被当成处理器调用；默认的 `OPTIONS()` 会通过 `Allow` 头报告该资源支持哪些方法。
+定位到资源之后，由 HTTP 动词决定执行什么：资源声明了就执行对应处理器，没声明则返回 `405 Method Not Allowed`——405 响应始终携带列出支持方法的 `Allow` 头（RFC 9110）。不是 HTTP 动词的请求同样得到 405，且不会调用任何处理器方法，因此资源自己的辅助方法不可能被当成处理器调用；但要注意资源本身仍会被实例化、其 `before()` 仍会先运行，之后才判定为 405。默认的 `OPTIONS()` 会通过 `Allow` 头报告该资源支持哪些方法。
 
-URL 段会自动转 StudlyCase 匹配目录名（`/users` → `Users`，`/blog_posts` → `BlogPosts`）。路径中的 `.` / `..` 段会被忽略，定位器永远不会逃出资源根目录；`baseDir` 必须是已存在的目录，否则抛出 `InvalidArgumentException`。
+匹配时只把 URL 段转小写，因此 `/Users` 与 `/users` 会命中同一个文件——除此之外不做任何改写，所以 `-` 与 `_` **不**等价，URL 必须与文件名一致（`/blog_posts` 只能命中 `blog_posts.php`）。路径中的 `.` / `..` 段会被丢弃，含反斜杠或 NUL 字节的段则直接拒绝路由，定位器永远不会逃出资源根目录；`baseDir` 必须是已存在的目录，否则抛出 `InvalidArgumentException`。
 
-**同级精确目录与通配目录的优先级**：精确目录（如 `Users/`）始终优先于通配目录（如 `___id___/`）。若同一深度两者都存在，精确匹配胜出——通配目录永远不会被命中。这是有意设计的：显式路由不应被参数捕获所遮蔽。
+**同级精确与通配的优先级**：精确的 `foo.php` / `foo/` 始终优先于通配。若同一深度两者都存在，精确匹配胜出——通配永远不会被命中。这是有意设计的：显式路由不应被参数捕获所遮蔽。
 
-**路由参数保留原始 URL 编码**：从 `___param___` 目录捕获的值按原样传入（例如 `hello%20world` 保持 `hello%20world`）。需要解码时用 `urldecode($this->param('name'))` 即可。这是有意设计的——保留原始编码为 `%2e%2e` 这类路径穿越变体提供了额外的防护层。
+**路由参数保留原始 URL 编码**：从 `___param___` 文件或目录捕获的值按原样传入（例如 `hello%20world` 保持 `hello%20world`）。需要解码时用 `urldecode($this->param('name'))` 即可。这是有意设计的——保留原始编码为 `%2e%2e` 这类路径穿越变体提供了额外的防护层。
+
+> **文件名就是类名**，所以 PHP 关键字不能做资源：`/new` 会需要 `class new {}`，解析器直接拒绝。改用复数（`/news`、`/lists`、`/classes`）或其他措辞——框架会把这类解析错误连同文件名和原因一起报出来。
+
+> **`resources/` 要放在文档根之外。** 根资源就叫 `index.php`，它同时也是 Web 服务器的默认文档名；若该目录位于 docroot 之下，直接请求它就可能被执行，从而绕过框架。
 
 ## API 参考
 

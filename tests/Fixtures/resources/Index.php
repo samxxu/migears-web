@@ -7,7 +7,7 @@ use MiGears\Web\AbstractResource;
 use MiGears\Web\Request;
 use MiGears\Web\Response;
 
-class Index extends AbstractResource
+class index extends AbstractResource
 {
     public function GET(Request $request): Response
     {
