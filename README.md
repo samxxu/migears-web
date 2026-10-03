@@ -250,6 +250,42 @@ Matching lowercases the URL segment, so `/Users` and `/users` reach the same fil
 
 > **Keep `resources/` outside the document root.** The root resource is literally called `index.php`, which is also the web server's default document name; if the directory sits under the docroot, a request for it can be executed directly, bypassing the framework.
 
+## Policy Hooks
+
+Two hooks can refuse a request before a handler runs, and they see different things:
+
+| | `MiRest::before()` | a resource's `before()` |
+|---|---|---|
+| When | before the locator runs, on every request | inside the matched resource, after its parameters are set and before the verb is checked |
+| What it has | the `Request` | `$request`, `$this->params` and `static::class` |
+| Endpoint identity | none — the literal path is all it gets | `static::class` names the endpoint: one key per endpoint, stable across parameter values |
+| A path that matches nothing | still passes through it | never reaches it |
+
+So `MiRest::before()` is the place for policy that does not depend on which endpoint was matched: a maintenance switch, a coarse "everything needs a session unless it is on this list", a bot filter, a shared security header. A decision that *is* per endpoint belongs in a resource-level `before()`, because that is the only one of the two that knows which endpoint it is — keying such a rule on `$request->path` means re-deriving the route the locator already resolved, and a prefix rule then grants the endpoint's children along with it.
+
+```php
+abstract class RestrictedResource extends AbstractResource
+{
+    protected function before(Request $request): ?Response
+    {
+        // static::class names the endpoint — ...\users\___user_id___ answers
+        // /users/{id} while ...\users answers /users — and $this->params carries
+        // the captured values. The literal path is on $request.
+        $policy = $this->resolve('policy');
+
+        if (!$policy->allows(static::class, $request->method, $this->params)) {
+            return Response::json(['error' => 'Forbidden'], 403);
+        }
+
+        return null;
+    }
+}
+```
+
+Returning a `Response` short-circuits, and this hook runs before the verb is checked — a refusal therefore does not tell an unauthorised caller which methods the endpoint supports.
+
+One caution: a base class is fail-open. A resource that forgets to extend it is silently unprotected, which is the reason to keep the coarse, endpoint-blind default in `MiRest::before()` and treat the per-endpoint layer as an addition rather than as the only line of defence.
+
 ## API Reference
 
 ### MiRest
@@ -570,6 +606,42 @@ $rest->set(RedisCache::class,            fn() => new RedisCache(new Redis()));
 > **文件名就是类名**，所以 PHP 关键字不能做资源：`/new` 会需要 `class new {}`，解析器直接拒绝。改用复数（`/news`、`/lists`、`/classes`）或其他措辞——框架会把这类解析错误连同文件名和原因一起报出来。
 
 > **`resources/` 要放在文档根之外。** 根资源就叫 `index.php`，它同时也是 Web 服务器的默认文档名；若该目录位于 docroot 之下，直接请求它就可能被执行，从而绕过框架。
+
+## 策略钩子
+
+有两个钩子能在处理器运行之前拒掉请求，而它们能看到的东西不同：
+
+| | `MiRest::before()` | 资源级 `before()` |
+|---|---|---|
+| 时机 | 定位器之前，每个请求都会经过 | 已定位的资源内，参数已就位、动词尚未判定 |
+| 手里有什么 | 只有 `Request` | `$request`、`$this->params` 与 `static::class` |
+| 端点身份 | 没有——只有一个字面路径 | `static::class` 就是端点：一个端点一个键，不随参数取值变化 |
+| 什么都没匹配上的路径 | 照样经过它 | 根本到不了 |
+
+所以 `MiRest::before()` 适合与「命中哪个端点」无关的策略：维护开关、粗粒度的「除白名单外一律要求会话」、bot 拦截、统一安全响应头。**按端点**做的判定属于资源级 `before()`，因为两者中只有它知道自己是哪个端点——拿 `$request->path` 去写这种规则，等于把定位器已经解出的路由再推一遍，而前缀规则还会把该端点的子路径一并放行。
+
+```php
+abstract class RestrictedResource extends AbstractResource
+{
+    protected function before(Request $request): ?Response
+    {
+        // static::class 就是端点——...\users\___user_id___ 响应 /users/{id}，
+        // ...\users 响应 /users；$this->params 里是捕获到的取值，
+        // 字面路径在 $request 上。
+        $policy = $this->resolve('policy');
+
+        if (!$policy->allows(static::class, $request->method, $this->params)) {
+            return Response::json(['error' => 'Forbidden'], 403);
+        }
+
+        return null;
+    }
+}
+```
+
+返回 `Response` 即短路，且该钩子在动词判定之前运行——因此拒绝不会告诉未授权者这个端点支持哪些方法。
+
+一点提醒：基类是 fail-open 的。忘记继承的资源会静默失守，这正是要把粗粒度、看不见端点的默认策略留在 `MiRest::before()`、而把按端点的判定当作叠加层而非唯一防线的原因。
 
 ## API 参考
 
