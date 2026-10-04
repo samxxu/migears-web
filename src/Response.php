@@ -7,8 +7,8 @@ namespace MiGears\Web;
  * Lightweight HTTP response object.
  * Resource methods return a Response, which is sent uniformly by the framework to avoid direct output.
  *
- * Properties are publicly mutable for extension — subclasses can add helpers,
- * and callers can chain withHeader() / withStatus() to build up the response.
+ * Properties are public and mutable, and withHeader() / withStatus() mutate in place
+ * and return $this, so a response is built up rather than replaced.
  */
 final class Response
 {

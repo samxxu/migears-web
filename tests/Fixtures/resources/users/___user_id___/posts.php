@@ -9,11 +9,12 @@ use MiGears\Web\Response;
 
 class posts extends AbstractResource
 {
+    public function __construct(private string $user_id) {}
+
     public function GET(Request $request): Response
     {
-        $userId = $this->params['user_id'] ?? '0';
         return Response::json([
-            'user_id' => $userId,
+            'user_id' => $this->user_id,
             'posts' => [['id' => 101], ['id' => 102]],
         ]);
     }

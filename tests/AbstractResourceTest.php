@@ -215,35 +215,6 @@ class AbstractResourceTest extends TestCase
         $this->assertSame(200, $resource->handle(new Request('get', '/'), 'get')->status);
     }
 
-    public function testSetParams(): void
-    {
-        $resource = $this->makeResource();
-        $resource->setParams(['id' => '42']);
-        $this->assertSame(['id' => '42'], $this->getProtectedProperty($resource, 'params'));
-    }
-
-    public function testSetRemaining(): void
-    {
-        $resource = $this->makeResource();
-        $resource->setRemaining(['extra', 'path']);
-        $this->assertSame(['extra', 'path'], $this->getProtectedProperty($resource, 'remaining'));
-    }
-
-    public function testParamReturnsValue(): void
-    {
-        $resource = $this->makeResource();
-        $resource->setParams(['user_id' => '42']);
-        $this->assertSame('42', $this->callProtected($resource, 'param', ['user_id']));
-    }
-
-    public function testParamReturnsDefaultWhenMissing(): void
-    {
-        $resource = $this->makeResource();
-        $resource->setParams([]);
-        $this->assertNull($this->callProtected($resource, 'param', ['missing']));
-        $this->assertSame('fallback', $this->callProtected($resource, 'param', ['missing', 'fallback']));
-    }
-
     public function testAssertIntReturnsInt(): void
     {
         $resource = $this->makeResource();
@@ -282,11 +253,5 @@ class AbstractResourceTest extends TestCase
     {
         $ref = new \ReflectionMethod($object, $method);
         return $ref->invokeArgs($object, $args);
-    }
-
-    private function getProtectedProperty(object $object, string $property): mixed
-    {
-        $ref = new \ReflectionProperty($object, $property);
-        return $ref->getValue($object);
     }
 }

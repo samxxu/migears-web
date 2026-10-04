@@ -237,11 +237,16 @@ use MiGears\Web\AbstractResource;
 use MiGears\Web\Request;
 use MiGears\Web\Response;
 class %s extends AbstractResource {
+%s
     public function GET(Request $r): Response { return Response::json(['from' => '%s']); }
 }
 PHP;
-        file_put_contents($dir . '/users/user_id.php', sprintf($template, $ns, 'user_id', 'exact'));
-        file_put_contents($dir . '/users/___user_id___.php', sprintf($template, $ns, '___user_id___', 'wildcard'));
+        // The exact segment captures nothing; the wildcard is handed `user_id`.
+        file_put_contents($dir . '/users/user_id.php', sprintf($template, $ns, 'user_id', '', 'exact'));
+        file_put_contents(
+            $dir . '/users/___user_id___.php',
+            sprintf($template, $ns, '___user_id___', '    public function __construct(private string $user_id) {}', 'wildcard')
+        );
 
         try {
             $rest = $this->rest($dir, $ns);
@@ -255,6 +260,87 @@ PHP;
             $this->assertSame('wildcard', json_decode($wildcard->body, true)['from']);
         } finally {
             unlink($dir . '/users/user_id.php');
+            unlink($dir . '/users/___user_id___.php');
+            rmdir($dir . '/users');
+            rmdir($dir);
+        }
+    }
+
+    public function testTheConstructorReceivesTheContainerAndThePathParameters(): void
+    {
+        // The container comes in positionally as the first parameter; the captured
+        // values follow by name, so a deeper resource receives its ancestors' too.
+        $suffix = uniqid('ctor');
+        $ns = 'MiGears\\Web\\Tests\\' . $suffix;
+        $dir = sys_get_temp_dir() . '/migears-ctor-' . $suffix;
+        mkdir($dir . '/users/___user_id___', 0777, true);
+
+        $template = <<<'PHP'
+<?php
+namespace %s;
+use MiGears\Web\AbstractResource;
+use MiGears\Web\Request;
+use MiGears\Web\Response;
+use Psr\Container\ContainerInterface;
+class %s extends AbstractResource {
+    public function __construct(private ContainerInterface $container, private string $user_id) {}
+    public function GET(Request $r): Response {
+        return Response::json(['id' => $this->user_id, 'tag' => $this->container->get('tag')]);
+    }
+}
+PHP;
+        file_put_contents($dir . '/users/___user_id___.php', sprintf($template, $ns . '\\users', '___user_id___'));
+        file_put_contents($dir . '/users/___user_id___/posts.php', sprintf($template, $ns . '\\users\\___user_id___', 'posts'));
+
+        try {
+            $rest = $this->rest($dir, $ns);
+            $rest->set('tag', static fn() => 'from-container');
+
+            $one = $rest->handle(new Request('GET', '/users/42'));
+            $this->assertSame(200, $one->status);
+            $this->assertSame(['id' => '42', 'tag' => 'from-container'], json_decode($one->body, true));
+
+            $deep = $rest->handle(new Request('GET', '/users/7/posts'));
+            $this->assertSame(200, $deep->status);
+            $this->assertSame(['id' => '7', 'tag' => 'from-container'], json_decode($deep->body, true));
+        } finally {
+            unlink($dir . '/users/___user_id___.php');
+            unlink($dir . '/users/___user_id___/posts.php');
+            rmdir($dir . '/users/___user_id___');
+            rmdir($dir . '/users');
+            rmdir($dir);
+        }
+    }
+
+    public function testAConstructorThatDoesNotAcceptTheCapturedParametersIsReportedReadably(): void
+    {
+        // The route captures `user_id`; the constructor declares `id` instead.
+        $suffix = uniqid('ctorbad');
+        $ns = 'MiGears\\Web\\Tests\\' . $suffix;
+        $dir = sys_get_temp_dir() . '/migears-ctorbad-' . $suffix;
+        mkdir($dir . '/users', 0777, true);
+
+        $template = <<<'PHP'
+<?php
+namespace %s\users;
+use MiGears\Web\AbstractResource;
+class ___user_id___ extends AbstractResource {
+    public function __construct(private string $id) {}
+}
+PHP;
+        file_put_contents($dir . '/users/___user_id___.php', sprintf($template, $ns));
+
+        try {
+            $rest = $this->rest($dir, $ns);
+            $rest->error(fn(\Throwable $e) => Response::json(['message' => $e->getMessage()], 500));
+
+            $response = $rest->handle(new Request('GET', '/users/42'));
+
+            $this->assertSame(500, $response->status);
+            $message = json_decode($response->body, true)['message'];
+            $this->assertStringContainsString('the route captured [user_id]', $message);
+            $this->assertStringContainsString('Unknown named parameter $user_id', $message);
+        } finally {
             unlink($dir . '/users/___user_id___.php');
             rmdir($dir . '/users');
             rmdir($dir);
@@ -521,27 +607,65 @@ PHP;
         $this->assertSame(500, $response->status);
     }
 
-    // --- CatchAll tests ---
+    // --- Catch-remaining tests ---
 
-    public function testCatchAll(): void
+    public function testCatchRemaining(): void
     {
         $rest = $this->rest();
-        $response = $rest->handle(new Request('GET', '/catchall/any/path'));
+        $response = $rest->handle(new Request('GET', '/docs/any/path'));
         $this->assertSame(200, $response->status);
         $data = json_decode($response->body, true);
-        $this->assertTrue($data['caught']);
+        $this->assertSame('/docs/any/path', $data['path']);
         $this->assertSame(['any', 'path'], $data['remaining']);
         // with remaining path, the before/after hooks must still run
         $this->assertSame('yes', $response->headers['X-Hooked']);
     }
 
-    public function testCatchAllRootRunsHooks(): void
+    public function testCatchRemainingWithoutATailStillRunsHooks(): void
     {
         $rest = $this->rest();
-        $response = $rest->handle(new Request('GET', '/catchall'));
+        $response = $rest->handle(new Request('GET', '/docs'));
         $this->assertSame(200, $response->status);
         // without remaining path, hooks must also run (consistency)
         $this->assertSame('yes', $response->headers['X-Hooked']);
+        $this->assertSame([], json_decode($response->body, true)['remaining']);
+    }
+
+    public function testAWildcardNamedRemainingCollidesWithTheLeftoverPathAndIsReported(): void
+    {
+        // `remaining` is the name the leftover path is handed over as, so a wildcard
+        // capturing that same name cannot have both passed.
+        $suffix = uniqid('collide');
+        $ns = 'MiGears\\Web\\Tests\\' . $suffix;
+        $dir = sys_get_temp_dir() . '/migears-collide-' . $suffix;
+        mkdir($dir . '/api/___remaining___', 0777, true);
+
+        $template = <<<'PHP'
+<?php
+namespace %s\api\___remaining___;
+use MiGears\Web\AbstractResource;
+class __catch_remaining__ extends AbstractResource {
+    public function __construct(private array $remaining) {}
+}
+PHP;
+        file_put_contents($dir . '/api/___remaining___/__catch_remaining__.php', sprintf($template, $ns));
+
+        try {
+            $rest = $this->rest($dir, $ns);
+            $rest->error(fn(\Throwable $e) => Response::json(['message' => $e->getMessage()], 500));
+
+            $response = $rest->handle(new Request('GET', '/api/x/y'));
+
+            $this->assertSame(500, $response->status);
+            $message = json_decode($response->body, true)['message'];
+            $this->assertStringContainsString('captured a parameter called', $message);
+            $this->assertStringContainsString('Rename that wildcard', $message);
+        } finally {
+            unlink($dir . '/api/___remaining___/__catch_remaining__.php');
+            rmdir($dir . '/api/___remaining___');
+            rmdir($dir . '/api');
+            rmdir($dir);
+        }
     }
 
     // --- No namespace tests ---

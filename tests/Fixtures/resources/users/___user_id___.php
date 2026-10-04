@@ -9,21 +9,20 @@ use MiGears\Web\Response;
 
 class ___user_id___ extends AbstractResource
 {
+    public function __construct(private string $user_id) {}
+
     public function GET(Request $request): Response
     {
-        $id = $this->params['user_id'] ?? '0';
-        return Response::json(['id' => $id, 'name' => 'User ' . $id]);
+        return Response::json(['id' => $this->user_id, 'name' => 'User ' . $this->user_id]);
     }
 
     public function PUT(Request $request): Response
     {
-        $id = $this->params['user_id'] ?? '0';
-        return Response::json(['id' => $id, 'updated' => true]);
+        return Response::json(['id' => $this->user_id, 'updated' => true]);
     }
 
     public function DELETE(Request $request): Response
     {
-        $id = $this->params['user_id'] ?? '0';
-        return Response::json(['id' => $id, 'deleted' => true]);
+        return Response::json(['id' => $this->user_id, 'deleted' => true]);
     }
 }

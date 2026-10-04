@@ -9,8 +9,8 @@ use Psr\Log\LoggerInterface;
 /**
  * MiRest — a minimalist REST framework.
  *
- * Core feature: file-as-route. No need to define a route table;
- * the filesystem is the route table.
+ * Core feature: file-as-routing. No need to define a route table;
+ * a resource file's path is the endpoint it answers.
  *
  * It is also the container: register only what needs configuration
  * (PDO, Redis, Logger, each DAO, each Manager). Everything else is just `new`.
@@ -28,7 +28,10 @@ use Psr\Log\LoggerInterface;
  */
 class MiRest implements ContainerInterface
 {
-    public const VERSION = '2.2.0';
+    public const VERSION = '2.3.0';
+
+    /** The constructor parameter a `__catch_remaining__.php` receives the leftover path as. */
+    private const REMAINING_ARGUMENT = 'remaining';
 
     private ResourceLocator $locator;
 
@@ -37,6 +40,9 @@ class MiRest implements ContainerInterface
 
     /** @var array<string, mixed> */
     private array $instances = [];
+
+    /** @var array<string, array{container: bool, params: list<string>}> */
+    private array $constructors = [];
 
     /** @var list<callable(Request): ?Response> */
     private array $beforeHandlers = [];
@@ -204,16 +210,9 @@ class MiRest implements ContainerInterface
         $className = $this->buildClassName($shortClassName, $namespaceSegments);
         $this->loadResourceClass($className, $filePath);
 
-        // Instantiate resource
-        $resource = $this->createResource($className);
-        $resource->setParams($params);
-
-        // Remaining path → the located resource (e.g. a catch-all) serves
-        // the rest of the path through the same template method, so the
-        // before/after hooks run consistently.
-        if (!empty($remaining)) {
-            $resource->setRemaining($remaining);
-        }
+        // Instantiate resource, handing it the container, the captured parameters and
+        // whatever is left of the path; the resource declares which of them it wants.
+        $resource = $this->createResource($className, $params, $remaining);
 
         // Call the resource's handle method (template method: before → method → after)
         return $resource->handle($request, $request->method);
@@ -321,18 +320,91 @@ class MiRest implements ContainerInterface
     }
 
     /**
-     * Create a resource instance.
+     * Create a resource instance. The contract — what arrives, and when — is stated
+     * once, on AbstractResource; this is the call site that honours it.
+     *
+     * The captured values always go in, by name, so a constructor that does not
+     * declare one of them is an assembly mistake: PHP's message names the offending
+     * parameter, and what this call site adds is the context, because one call here
+     * serves every route. The container goes in positionally, in front of them — it
+     * cannot travel by name, since PHP forbids unpacking after named arguments. The
+     * leftover path goes in by name, and only when the constructor declares it.
+     *
+     * @param array<string, string> $params
+     * @param list<string> $remaining
      */
-    private function createResource(string $className): AbstractResource
+    private function createResource(string $className, array $params, array $remaining): AbstractResource
     {
         if (!class_exists($className, false)) {
             throw new \RuntimeException("Resource class not found: $className");
         }
-        $resource = new $className();
+
+        $constructor = $this->constructor($className);
+
+        $arguments = $params;
+        if (in_array(self::REMAINING_ARGUMENT, $constructor['params'], true)) {
+            if (array_key_exists(self::REMAINING_ARGUMENT, $params)) {
+                throw new \RuntimeException(
+                    "Cannot build {$className}: a wildcard captured a parameter called '"
+                    . self::REMAINING_ARGUMENT . "', which is the name the leftover path is handed over as. "
+                    . 'Rename that wildcard, or drop the parameter from the constructor.'
+                );
+            }
+            $arguments[self::REMAINING_ARGUMENT] = $remaining;
+        }
+
+        try {
+            $resource = $constructor['container']
+                ? new $className($this, ...$arguments)
+                : new $className(...$arguments);
+        } catch (\Error $e) {
+            throw new \RuntimeException(
+                "Cannot build {$className}: the route captured ["
+                . implode(', ', array_keys($params)) . "] but constructing the resource failed. "
+                . $e->getMessage(),
+                0,
+                $e
+            );
+        }
+
         if (!$resource instanceof AbstractResource) {
             throw new \RuntimeException("Resource must extend AbstractResource: $className");
         }
-        $resource->setRest($this);
         return $resource;
+    }
+
+    /**
+     * What the resource's constructor declares, reflected once per class and
+     * remembered like the container's own entries.
+     *
+     * `container` is true when the first parameter is typed `ContainerInterface`, or
+     * any type implementing it — the type is the request, and that position is where
+     * it goes. `params` are the declared names, so a value is only handed over by name
+     * when the constructor actually declares it.
+     *
+     * @return array{container: bool, params: list<string>}
+     */
+    private function constructor(string $className): array
+    {
+        if (isset($this->constructors[$className])) {
+            return $this->constructors[$className];
+        }
+
+        $constructor = (new \ReflectionClass($className))->getConstructor();
+        $parameters = $constructor === null ? [] : $constructor->getParameters();
+
+        $names = [];
+        foreach ($parameters as $parameter) {
+            $names[] = $parameter->getName();
+        }
+
+        $type = $parameters === [] ? null : $parameters[0]->getType();
+
+        return $this->constructors[$className] = [
+            'container' => $type instanceof \ReflectionNamedType
+                && !$type->isBuiltin()
+                && is_a($type->getName(), ContainerInterface::class, true),
+            'params' => $names,
+        ];
     }
 }

@@ -7,11 +7,22 @@ namespace MiGears\Web;
  * REST resource base class.
  *
  * Resource classes extend this class and implement the corresponding HTTP methods
- * (GET/POST/PUT/DELETE, etc., uppercase).
- * Methods accept a Request and return a Response.
+ * (GET/POST/PUT/DELETE, etc., uppercase). Methods accept a Request and return a Response.
  *
- * Container: use $this->resolve(PDO::class) to reach a registered entry.
- * Only register things that need configuration (PDO, Redis, Logger, DAOs, ...).
+ * What a resource needs arrives through its constructor, and only what it declares:
+ *
+ *   public function __construct(
+ *       private ContainerInterface $container,   // optional, and it must come first
+ *       private string $user_id,                 // a wildcard this path captured
+ *       private array $remaining,                // a __catch_remaining__.php's tail
+ *   ) {}
+ *
+ * The captured values are passed by name unconditionally, so each one the path
+ * carries has to be declared; the container is opt-in through the type of the first
+ * parameter; `remaining` is opt-in by name. Captured segments are raw and still
+ * URL-encoded, so a parameter can only be typed `string`. A resource that wants none
+ * of them declares no constructor at all — and anything needing no configuration is
+ * simply `new`'d.
  */
 abstract class AbstractResource
 {
@@ -30,75 +41,6 @@ abstract class AbstractResource
     private const HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
 
     /**
-     * Named parameters from the resource path (parsed from URL wildcards).
-     *
-     * @var array<string, string>
-     */
-    protected array $params = [];
-
-    /**
-     * Remaining path segments after the located resource (only populated for
-     * catch-all resources; empty otherwise).
-     *
-     * @var list<string>
-     */
-    protected array $remaining = [];
-
-    private MiRest $rest;
-
-    /**
-     * Set named parameters (called by MiRest).
-     *
-     * @param array<string, string> $params
-     */
-    public function setParams(array $params): void
-    {
-        $this->params = $params;
-    }
-
-    /**
-     * Set remaining path segments (called by MiRest for catch-all resources).
-     *
-     * @param list<string> $remaining
-     */
-    public function setRemaining(array $remaining): void
-    {
-        $this->remaining = $remaining;
-    }
-
-    /**
-     * Set the MiRest instance (called by MiRest during resource creation).
-     */
-    public function setRest(MiRest $rest): void
-    {
-        $this->rest = $rest;
-    }
-
-    /**
-     * Resolve a registered entry by ID (class name or custom string).
-     *
-     * Named resolve() rather than get() on purpose: PHP method names are
-     * case-insensitive, so a get() here would collide with the HTTP GET() verb.
-     *
-     * Only ids registered via MiRest::set() are available; for things that need
-     * no configuration, just use `new`.
-     *
-     * @throws NotFoundException when nothing is registered under $id
-     */
-    protected function resolve(string $id): mixed
-    {
-        return $this->rest->get($id);
-    }
-
-    /**
-     * Get a named route parameter.
-     */
-    protected function param(string $name, mixed $default = null): mixed
-    {
-        return $this->params[$name] ?? $default;
-    }
-
-    /**
      * Validate a value as an integer. Returns the int on success,
      * throws a 404 ResourceNotFoundException on failure.
      */
@@ -115,9 +57,8 @@ abstract class AbstractResource
      * Handle the request: before → HTTP method → after.
      * This is a template method; subclasses generally do not need to override it.
      *
-     * Only the verbs in HTTP_METHODS are dispatchable; anything else is answered
-     * with 405 and calls no handler method. The before() hook above still runs
-     * first, because the verb is checked only after it.
+     * Which verbs can be dispatched, and what the rest get, is stated on
+     * HTTP_METHODS rather than repeated here.
      */
     public function handle(Request $request, string $method): Response
     {

@@ -9,7 +9,10 @@ namespace MiGears\Web;
  *
  * A segment is answered by a file when it ends the path, and by a directory when
  * more path follows — which is why `/users` and `/users/42` sit side by side
- * without an index file in between.
+ * without an index file in between. One asymmetry is worth knowing: a directory
+ * that ends the path is still entered when its name matches exactly, so `/docs`
+ * reaches the catch-remaining file inside `docs/`; a wildcard directory is not,
+ * so `/api/v1` never reaches the one inside `api/___version___/`.
  *
  * File naming conventions (lowercase, used verbatim — the path is the name):
  *   index.php        → the root resource, `/`
@@ -17,7 +20,11 @@ namespace MiGears\Web;
  *   <segment>/       → container for a deeper path
  *   ___name___.php   → wildcard for one segment, its value passed as `name`
  *   ___name___/      → wildcard container
- *   __other__.php    → catch-all for this level and everything below it
+ *   __catch_remaining__.php → catches the path this level cannot answer
+ *
+ * The last one is deliberately two underscores, not three: `___*___` is the wildcard
+ * shape, so a three-underscore name would be matched as a wildcard rather than by its
+ * own name, and would shadow the real wildcards beside it.
  *
  * The class name is the file name, so `users/___user_id___.php` declares the
  * class `namespace\users\___user_id___`. Because a file name becomes a PHP class
@@ -31,7 +38,7 @@ namespace MiGears\Web;
 class ResourceLocator
 {
     private const ROOT_FILE = 'index.php';
-    private const CATCH_ALL_FILE = '__other__.php';
+    private const CATCH_REMAINING_FILE = '__catch_remaining__.php';
     private const WILDCARD_FILE_PATTERN = '___*___.php';
     private const WILDCARD_DIR_PATTERN = '___*___';
 
@@ -68,7 +75,7 @@ class ResourceLocator
                 return [$this->classNameOf(self::ROOT_FILE), $rootFile, $params, [], $namespaceSegments];
             }
 
-            return $this->catchAll($dir, $params, $namespaceSegments, []);
+            return $this->catchRemaining($dir, $params, $namespaceSegments, []);
         }
 
         $lastIndex = count($segments) - 1;
@@ -109,30 +116,31 @@ class ResourceLocator
                 continue;
             }
 
-            // 4. Catch-all declared at this level
-            return $this->catchAll($dir, $params, $namespaceSegments, array_slice($segments, $i));
+            // 4. The catch-remaining file declared at this level
+            return $this->catchRemaining($dir, $params, $namespaceSegments, array_slice($segments, $i));
         }
 
-        // Every segment was consumed by a container: only a catch-all can answer.
-        return $this->catchAll($dir, $params, $namespaceSegments, []);
+        // Every segment was consumed by a container: only the catch-remaining file can
+        // answer, which is how `/docs` reaches the file inside `docs/`.
+        return $this->catchRemaining($dir, $params, $namespaceSegments, []);
     }
 
     /**
-     * The catch-all declared in $dir, with whatever path is left over.
+     * The catch-remaining file declared in $dir, with whatever path is left over.
      *
      * @param array<string, string> $params
      * @param list<string> $namespaceSegments
      * @param list<string> $remaining
      * @return array{0: string, 1: string, 2: array<string, string>, 3: list<string>, 4: list<string>}|null
      */
-    private function catchAll(string $dir, array $params, array $namespaceSegments, array $remaining): ?array
+    private function catchRemaining(string $dir, array $params, array $namespaceSegments, array $remaining): ?array
     {
-        $file = $dir . '/' . self::CATCH_ALL_FILE;
+        $file = $dir . '/' . self::CATCH_REMAINING_FILE;
         if (!$this->fileExists($file)) {
             return null;
         }
 
-        return [$this->classNameOf(self::CATCH_ALL_FILE), $file, $params, $remaining, $namespaceSegments];
+        return [$this->classNameOf(self::CATCH_REMAINING_FILE), $file, $params, $remaining, $namespaceSegments];
     }
 
     /**

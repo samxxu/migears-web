@@ -115,7 +115,7 @@ class ContainerTest extends TestCase
 
     public function testResolvingAnUnregisteredIdInsideAResourceSurfacesAsAnError(): void
     {
-        // no 'config' registered: resolve() throws instead of handing back null,
+        // no 'config' registered: get() throws instead of handing back null,
         // so an assembly mistake becomes a 500 rather than an empty config
         $response = $this->rest->handle(new Request('GET', '/config'));
 

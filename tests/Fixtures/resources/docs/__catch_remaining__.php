@@ -1,20 +1,20 @@
 <?php
 declare(strict_types=1);
 
-namespace MiGears\Web\Tests\Fixtures\Resources\catchall;
+namespace MiGears\Web\Tests\Fixtures\Resources\docs;
 
 use MiGears\Web\AbstractResource;
 use MiGears\Web\Request;
 use MiGears\Web\Response;
 
-class __other__ extends AbstractResource
+class __catch_remaining__ extends AbstractResource
 {
+    public function __construct(private array $remaining) {}
+
     public function GET(Request $request): Response
     {
         return Response::json([
-            'caught' => true,
             'path' => $request->path,
-            'params' => $this->params,
             'remaining' => $this->remaining,
         ]);
     }

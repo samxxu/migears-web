@@ -1,8 +1,19 @@
 # migears/web
 
-![Version](https://img.shields.io/badge/version-2.2.0-blue)
+![Version](https://img.shields.io/badge/version-2.3.0-blue)
 
 A minimalist REST framework with file-as-routing. Zero magic, zero global variables, core code under 600 lines.
+
+> **Upgrading from 2.2?** Path parameters no longer pass through `$this->params` /
+> `param()`: they arrive as constructor parameters. Turn `$this->param('user_id')`
+> into `$this->user_id`, and give that resource `__construct(private string $user_id) {}`,
+> declaring every wildcard its path carries.
+>
+> Three names changed with that: the file that catches the leftover path is now
+> `__catch_remaining__.php`, and the leftover path itself arrives as `$remaining` in
+> the constructor instead of `$this->remaining`; `setRest()` and `resolve()` are gone,
+> so a resource that wants the container types its constructor's first parameter
+> `ContainerInterface` and reads entries through `$this->container->get($id)`.
 
 > **Upgrading from 2.1?** This release changes the resource layout and the class
 > naming rule: one file per path (`users.php`, `users/___user_id___.php`) instead
@@ -30,9 +41,9 @@ A minimalist REST framework with file-as-routing. Zero magic, zero global variab
 
 **In scope**
 
-- File-as-routing and dispatch: `ResourceLocator` walks the filesystem (`<segment>.php` / `___param___` / `__other__.php`), and `MiRest::handle()` wires global before/after hooks, the 404 and error handlers, and the template method `before` → HTTP verb → `after`.
+- File-as-routing and dispatch: `ResourceLocator` walks the filesystem (`<segment>.php` / `___param___` / `__catch_remaining__.php`), and `MiRest::handle()` wires global before/after hooks, the 404 and error handlers, and the template method `before` → HTTP verb → `after`.
 - The lightweight `Request` / `Response` objects (`Request::fromGlobals()`, `Response::json` / `html` / `redirect` / `empty`, `send()`) and `AbstractResource`'s HTTP verb handlers, including the `OPTIONS` / `HEAD` defaults and the `405` response with an `Allow` header.
-- The PSR-11 container that `MiRest` itself is (`set()` / `has()` / `get()`, lazy-singleton factories) plus `$this->resolve()` inside resources — it is the composition root that wires the sibling modules together.
+- The PSR-11 container that `MiRest` itself is (`set()` / `has()` / `get()`, lazy-singleton factories) plus the container a resource asks for through its constructor — it is the composition root that wires the sibling modules together.
 
 **Not in scope (by design)**
 
@@ -61,8 +72,8 @@ resources/
     ___user_id___.php        # GET /users/{user_id}, PUT /users/{user_id}, DELETE /users/{user_id}
     ___user_id___/
       posts.php              # GET /users/{user_id}/posts
-  catchall/
-    __other__.php            # Fallback match for /catchall/*
+  docs/
+    __catch_remaining__.php  # catches /docs/a/b — what nothing else answers
 ```
 
 ### 2. Write Resource Class
@@ -70,7 +81,8 @@ resources/
 The class name is the file name. The file below lives at
 `resources/users/___user_id___.php` and the bootstrap uses `namespace: 'App\\Resources'`,
 so the class is `App\Resources\users\___user_id___` — the directories contribute
-their names verbatim, with no case conversion.
+their names verbatim, with no case conversion. The wildcard on its path arrives as a
+constructor parameter.
 
 ```php
 <?php
@@ -84,15 +96,17 @@ use MiGears\Web\Response;
 
 class ___user_id___ extends AbstractResource
 {
+    public function __construct(private string $user_id) {}
+
     public function GET(Request $request): Response
     {
-        $userId = (int) $this->param('user_id');
+        $userId = (int) $this->user_id;
         return Response::json(['id' => $userId, 'name' => 'User ' . $userId]);
     }
 
     public function PUT(Request $request): Response
     {
-        $userId = (int) $this->param('user_id');
+        $userId = (int) $this->user_id;
         $body = $request->body;
         return Response::json(['id' => $userId, 'updated' => $body], 200);
     }
@@ -143,7 +157,7 @@ MiRest **is** the container: register only what needs configuration (PDO, Redis,
 - **Register only what needs configuration** — the container exists for objects with setup (DSNs, hosts, credentials). Pure value objects (Request, Response, Domains, ...) are simply `new`'d in place.
 - **Closure-based, lazy factories** — each entry is a factory closure. It is **not** executed until first requested, and its result is cached.
 - **One instance per entry** — every entry resolves to one shared instance for the lifetime of the `MiRest` object.
-- **Opt-in, no auto-wiring** — the container does no reflection-based auto-wiring and no magical resolution; an entry must be registered explicitly to be used. Explicit beats magical: this keeps the whole container under ~40 lines and instantly readable. (The package's only use of reflection is elsewhere: detecting which HTTP verbs a resource declares, feeding the `OPTIONS` default and the `405` `Allow` header.)
+- **Opt-in, no auto-wiring** — the container does no reflection-based auto-wiring and no magical resolution; an entry must be registered explicitly to be used. Explicit beats magical: this keeps the whole container under ~40 lines and instantly readable. (The package uses reflection for three things, all discovery rather than wiring: detecting which HTTP verbs a resource declares — feeding the `OPTIONS` default and the `405` `Allow` header — reading the type of a resource constructor's first parameter, to see whether it asks for the container, and reading that constructor's declared parameter names, to see whether it asks for `remaining`.)
 - **No globals, no static** — the container lives on the `MiRest` instance and is handed to every resource.
 
 ### The whole API: three methods
@@ -168,7 +182,7 @@ $rest->get(PDO::class);   // 2nd call returns the SAME cached instance
 $rest->get('missing');    // throws NotFoundException — an unregistered id is an assembly mistake
 ```
 
-`get()` throwing is PSR-11's requirement rather than a style choice: a typo or a forgotten registration must fail where it is asked for, instead of surfacing later as a `null` that "is not an object". Probing for something optional is what `has()` is for. `NotFoundException` is also a `RuntimeException`, and it is not `ResourceNotFoundException` — that one means "no resource matched this path" (a 404), this one means "the application was not wired correctly", and since the container entries are resolved before dispatch, such a failure is thrown out of `handle()` rather than answered with a 500 response.
+`get()` throwing is PSR-11's requirement rather than a style choice: a typo or a forgotten registration must fail where it is asked for, instead of surfacing later as a `null` that "is not an object". Probing for something optional is what `has()` is for. `NotFoundException` is also a `RuntimeException`, and it is not `ResourceNotFoundException` — that one means "no resource matched this path" (a 404), this one means "the application was not wired correctly". Where such a failure surfaces depends on who asked: the framework resolves its own logger before dispatch, so a misregistration there escapes `handle()` as an exception, while an entry a resource asks for is resolved during dispatch and is answered with a 500.
 
 Re-registering with `set()` replaces the factory **and drops the cached instance**, so the next `get()` builds a fresh object — handy for redeploy/rebuild or tests.
 
@@ -182,23 +196,25 @@ $rest->set(\Psr\Log\LoggerInterface::class, fn() => new \Psr\Log\NullLogger());
 
 ### Using the container inside resources
 
-Each resource receives the container (its `MiRest` instance) and resolves entries through `$this->resolve()`:
+A resource asks for the container by typing its first constructor parameter `ContainerInterface`, then reaches entries through it directly:
 
 ```php
-class Users extends AbstractResource
+class users extends AbstractResource
 {
+    public function __construct(private ContainerInterface $container) {}
+
     public function GET(Request $request): Response
     {
-        $pdo    = $this->resolve(PDO::class);              // shared PDO from the container
-        $logger = $this->resolve(LoggerInterface::class);  // and the shared logger
-        $dao    = new UserDao($pdo, $logger);              // plain `new` — no container needed
+        $pdo    = $this->container->get(PDO::class);              // shared PDO from the container
+        $logger = $this->container->get(LoggerInterface::class);  // and the shared logger
+        $dao    = new UserDao($pdo, $logger);                     // plain `new` — no container needed
 
         return Response::json($dao->getAll());
     }
 }
 ```
 
-The accessor is named `resolve()` rather than `get()` on purpose: PHP method names are case-insensitive, so a `get()` here would collide with the HTTP `GET()` verb.
+The container is opt-in: a resource that does not declare it never sees it and pays nothing. (The class is `users`, not `Users` — the file name is the class name.)
 
 Typical bootstrap wiring:
 
@@ -228,11 +244,28 @@ level, with `foo` as the current segment:
 2. **`foo/`** — when more path follows, the directory is entered and matching continues with `bar/baz`
 3. **`___name___.php`** — a wildcard file, when the segment ends the path: any segment matches and is captured as `name`
 4. **`___name___/`** — a wildcard directory, when more path follows
-5. **`__other__.php`** — a catch-all declared at this level answers the current segment and everything after it; its tail arrives in `$this->remaining`
+5. **`__catch_remaining__.php`** — answers the current segment and everything after it (two underscores, not three — `___name___` is the wildcard shape)
 6. **404** — if none of the above match, return 404
+
+**Three things can reach a resource's constructor, under different rules:**
+
+| Channel | How | When |
+|---|---|---|
+| The path's captures | by name | always — declare every value the path carries, or the build fails naming the one you left out |
+| The container | positionally, first | the first parameter is typed `ContainerInterface` |
+| The leftover path | by name, as `remaining` | the constructor declares it |
+
+A resource at `users/___user_id___.php` declares `__construct(private string $user_id) {}` and reads `$this->user_id`; `/users/{user_id}/posts` is handed `user_id` too, because the captures of the whole path arrive, not just the last one. Captured segments are raw, so a parameter can only be typed `string` — validating or casting one is the resource's own job. `remaining` is a reserved name: a wildcard that captures it as well is reported rather than resolved in silence. A resource that wants none of them declares no constructor at all.
 
 A file and a directory of the same name coexist happily: `users.php` is the
 collection, `users/` holds its members.
+
+**The remaining path is caught where matching stopped.** A `__catch_remaining__.php` answers the segment that no file or directory claimed, and everything after it — which is how a resource of undetermined depth is written: `docs/__catch_remaining__.php` serves `/docs/a/b/c` with `$remaining = ['a', 'b', 'c']` in its constructor.
+
+Two edges follow, both worth knowing before placing one:
+
+- A directory is a container, entered to carry the path further. An **exact** directory is also entered when it ends the path — that is how `/docs` reaches the file inside `docs/`. A **wildcard** directory is not, so `/api/v1` never reaches a catch-remaining file inside `api/___version___/`. `___version___/` is a container for `/api/v1/...`, not a resource for `/api/v1`; that depth needs a file (`api/___version___.php`).
+- Placed at the root, it catches everything the site does not answer, so `/nonexistent` becomes a 200. Put it at the level you actually want to own.
 
 Finally, the located resource serves the request through the template method `handle()` (`before` → HTTP method → `after`), so **hooks run consistently** whether or not extra path segments matched.
 
@@ -244,7 +277,7 @@ Matching lowercases the URL segment, so `/Users` and `/users` reach the same fil
 
 **Wildcard vs exact on the same level**: an exact `foo.php` / `foo/` always takes priority over a wildcard. If both exist at the same depth, the exact match wins — the wildcard is never reached. This is intentional: explicit routes should not be shadowed by parameter captures.
 
-**Route parameters keep their raw URL encoding**: values captured from a `___param___` file or directory are passed through as-is (e.g. `hello%20world` stays `hello%20world`). Use `urldecode($this->param('name'))` when you need the decoded value. This is intentional — keeping raw encoding provides an extra layer of protection against path-traversal variants like `%2e%2e`.
+**Route parameters keep their raw URL encoding**: values captured from a `___param___` file or directory are passed through as-is (e.g. `hello%20world` stays `hello%20world`). Use `urldecode()` on the constructor parameter when you need the decoded value. This is intentional — keeping raw encoding provides an extra layer of protection against path-traversal variants like `%2e%2e`.
 
 > **A file name is a class name**, so a segment that is a PHP keyword cannot be a resource: `/new` would need `class new {}`, which the parser rejects. Use the plural (`/news`, `/lists`, `/classes`) or another wording — the framework reports that parse error with the file name and the reason.
 
@@ -256,8 +289,8 @@ Two hooks can refuse a request before a handler runs, and they see different thi
 
 | | `MiRest::before()` | a resource's `before()` |
 |---|---|---|
-| When | before the locator runs, on every request | inside the matched resource, after its parameters are set and before the verb is checked |
-| What it has | the `Request` | `$request`, `$this->params` and `static::class` |
+| When | before the locator runs, on every request | inside the matched resource, after its constructor parameters are injected and before the verb is checked |
+| What it has | the `Request` | `$request` and `static::class` |
 | Endpoint identity | none — the literal path is all it gets | `static::class` names the endpoint: one key per endpoint, stable across parameter values |
 | A path that matches nothing | still passes through it | never reaches it |
 
@@ -266,14 +299,16 @@ So `MiRest::before()` is the place for policy that does not depend on which endp
 ```php
 abstract class RestrictedResource extends AbstractResource
 {
+    public function __construct(protected ContainerInterface $container) {}
+
     protected function before(Request $request): ?Response
     {
         // static::class names the endpoint — ...\users\___user_id___ answers
-        // /users/{id} while ...\users answers /users — and $this->params carries
-        // the captured values. The literal path is on $request.
-        $policy = $this->resolve('policy');
+        // /users/{id} while ...\users answers /users. The literal path — what an
+        // endpoint-level rule usually keys on — is on $request.
+        $policy = $this->container->get('policy');
 
-        if (!$policy->allows(static::class, $request->method, $this->params)) {
+        if (!$policy->allows(static::class, $request->method, $request->path)) {
             return Response::json(['error' => 'Forbidden'], 403);
         }
 
@@ -282,7 +317,11 @@ abstract class RestrictedResource extends AbstractResource
 }
 ```
 
+A resource that extends this base class and also takes path parameters declares its own constructor, and has to forward the container — `parent::__construct($container)` — or `before()` meets an uninitialised property.
+
 Returning a `Response` short-circuits, and this hook runs before the verb is checked — a refusal therefore does not tell an unauthorised caller which methods the endpoint supports.
+
+A base class cannot read its subclasses' constructor parameters: those are in scope only inside the resource that declares them. Endpoint-level policy therefore belongs here, keyed on the endpoint; a rule that needs a parameter's value is a row-level rule and belongs in the resource itself.
 
 One caution: a base class is fail-open. A resource that forgets to extend it is silently unprotected, which is the reason to keep the coarse, endpoint-blind default in `MiRest::before()` and treat the per-endpoint layer as an addition rather than as the only line of defence.
 
@@ -343,11 +382,7 @@ $response->send(): void
 | `HEAD()` | `GET()` without a body |
 | `before(Request): ?Response` | Before hook, short-circuits if a response is returned |
 | `after(Request, Response): Response` | After hook, modifies and returns the response |
-| `param(string $name, mixed $default = null): mixed` | Get a named route parameter |
-| `resolve(string $id): mixed` | Resolve a registered entry (PDO, Logger, a Manager, ...) |
 | `assertInt(mixed, string): int` | Validate as integer, throws 404 on failure |
-| `$this->params` | All named parameters array |
-| `$this->remaining` | Remaining path segments (only for catch-all resources) |
 
 ## License
 
@@ -357,9 +392,18 @@ MIT
 
 # migears/web
 
-![Version](https://img.shields.io/badge/version-2.2.0-blue)
+![Version](https://img.shields.io/badge/version-2.3.0-blue)
 
 极简 REST 框架，文件即路由。零魔法、零全局变量，核心代码不到 600 行。
+
+> **从 2.2 升级？** 路径参数不再走 `$this->params` / `param()`，改为构造器参数。
+> 把 `$this->param('user_id')` 改成 `$this->user_id`，并给该资源加上
+> `__construct(private string $user_id) {}`——路径上每个通配都要声明。
+>
+> 随之改了三个名字：接管剩余路径的文件由 `__other__.php` 改为 `__catch_remaining__.php`，
+> 剩余路径本身也不再是 `$this->remaining`，而是构造器参数 `$remaining`；`setRest()` 与
+> `resolve()` 一并删除，要容器的资源把构造器第一个参数类型写成 `ContainerInterface`，
+> 之后用 `$this->container->get($id)` 取条目。
 
 > **从 2.1 升级？** 本次发布改了资源布局与类名规则：一个路径一个文件
 > （`users.php`、`users/___user_id___.php`），不再是一个目录里放一个 `Index.php`；
@@ -385,9 +429,9 @@ MIT
 
 **范围内**
 
-- 文件即路由与分发：`ResourceLocator` 逐级遍历文件系统（`<segment>.php` / `___param___` / `__other__.php`），`MiRest::handle()` 负责接线全局 before/after 钩子、404 与异常处理器，以及 `before` → HTTP 动词 → `after` 模板方法。
+- 文件即路由与分发：`ResourceLocator` 逐级遍历文件系统（`<segment>.php` / `___param___` / `__catch_remaining__.php`），`MiRest::handle()` 负责接线全局 before/after 钩子、404 与异常处理器，以及 `before` → HTTP 动词 → `after` 模板方法。
 - 轻量 `Request` / `Response` 对象（`Request::fromGlobals()`、`Response::json` / `html` / `redirect` / `empty`、`send()`），以及 `AbstractResource` 的 HTTP 动词处理器，包括默认 `OPTIONS` / `HEAD` 与带 `Allow` 头的 `405` 响应。
-- `MiRest` 本身就是的 PSR-11 容器（`set()` / `has()` / `get()`，懒加载单例工厂），以及资源内的 `$this->resolve()` —— 它是把各兄弟模块接线到一起的组合根。
+- `MiRest` 本身就是的 PSR-11 容器（`set()` / `has()` / `get()`，懒加载单例工厂），以及资源通过构造器索取的容器 —— 它是把各兄弟模块接线到一起的组合根。
 
 **范围外（刻意不做）**
 
@@ -416,8 +460,8 @@ resources/
     ___user_id___.php        # GET /users/{user_id}, PUT /users/{user_id}, DELETE /users/{user_id}
     ___user_id___/
       posts.php              # GET /users/{user_id}/posts
-  catchall/
-    __other__.php            # 兜底匹配 /catchall/*
+  docs/
+    __catch_remaining__.php  # 接管 /docs/a/b 这类没人认领的路径
 ```
 
 ### 2. 编写资源类
@@ -425,6 +469,7 @@ resources/
 类名就是文件名。下面的文件在 `resources/users/___user_id___.php`，
 bootstrap 里用的是 `namespace: 'App\\Resources'`，所以类名是
 `App\Resources\users\___user_id___` —— 各级目录名原样作为命名空间段，不做任何大小写转换。
+路径上的通配以构造器参数传入。
 
 ```php
 <?php
@@ -438,15 +483,17 @@ use MiGears\Web\Response;
 
 class ___user_id___ extends AbstractResource
 {
+    public function __construct(private string $user_id) {}
+
     public function GET(Request $request): Response
     {
-        $userId = (int) $this->param('user_id');
+        $userId = (int) $this->user_id;
         return Response::json(['id' => $userId, 'name' => 'User ' . $userId]);
     }
 
     public function PUT(Request $request): Response
     {
-        $userId = (int) $this->param('user_id');
+        $userId = (int) $this->user_id;
         $body = $request->body;
         return Response::json(['id' => $userId, 'updated' => $body], 200);
     }
@@ -499,7 +546,7 @@ MiRest **本身就是**容器：只注册需要配置的东西（PDO、Redis、L
 - **只注册需要配置的部分** — 容器存在的意义是有配置需求的对象（DSN、主机、账号密码）。纯粹的值对象（Request、Response、Domain 等）就地 `new` 即可。
 - **闭包工厂、懒加载** — 每个条目都是一个工厂闭包，**首次被请求时才执行**，结果会被缓存。
 - **一个条目一个实例** — 每个条目在 `MiRest` 对象生命周期内只解析出一个共享实例。
-- **显式登记，不做自动装配** — 容器不做基于反射的自动装配、没有魔法解析；想用某个条目必须显式 `set()`。显式优于魔法：这让整个容器保持在 40 行以内，可一口气读懂。（本包唯一的反射用途在别处：探测资源声明了哪些 HTTP 动词，供 `OPTIONS` 默认实现与 `405` 的 `Allow` 头使用。）
+- **显式登记，不做自动装配** — 容器不做基于反射的自动装配、没有魔法解析；想用某个条目必须显式 `set()`。显式优于魔法：这让整个容器保持在 40 行以内，可一口气读懂。（本包有三处反射，都是「发现」而非「装配」：探测资源声明了哪些 HTTP 动词——供 `OPTIONS` 默认实现与 `405` 的 `Allow` 头使用——读取资源构造器第一个参数的类型，看它是否要容器，以及读取该构造器声明的参数名，看它是否要 `remaining`。）
 - **无全局、无静态** — 容器挂在 `MiRest` 实例上，随框架注入到每个资源。
 
 ### 全部 API 只有三个方法
@@ -528,8 +575,9 @@ $rest->get('missing');    // 抛 NotFoundException —— 未注册的 id 属于
 `get()` 会抛不是风格选择，而是 PSR-11 的要求：拼错或漏注册必须在要它的地方失败，
 而不是过一阵子以「某个 `null` 不是对象」的形式冒出来。要探测可有可无的东西，用 `has()`。
 `NotFoundException` 同时也是 `RuntimeException`；它不是 `ResourceNotFoundException` ——
-后者是「没有资源匹配这个路径」（404），前者是「应用没装配对」，而且由于容器条目在分发之前解析，
-这种失败会从 `handle()` 抛出，而不是被回应成一个 500 响应。
+后者是「没有资源匹配这个路径」（404），前者是「应用没装配对」。它在哪一层暴露取决于**谁在问**：
+框架自己的 logger 在分发之前解析，配错就会从 `handle()` 抛出；而资源在分发过程中取的条目，
+则会被兜成一个 500 响应。
 
 重新 `set()` 会替换工厂**并丢弃已缓存的实例**，下次 `get()` 会构建全新对象 —— 适合重新部署或测试场景。
 
@@ -543,23 +591,25 @@ $rest->set(\Psr\Log\LoggerInterface::class, fn() => new \Psr\Log\NullLogger());
 
 ### 在资源类内使用容器
 
-每个资源都会拿到容器（其所属 `MiRest` 实例），通过 `$this->resolve()` 取条目：
+资源把容器声明为构造器的第一个参数（类型写 `ContainerInterface`）即可获得它，之后直接取条目：
 
 ```php
-class Users extends AbstractResource
+class users extends AbstractResource
 {
+    public function __construct(private ContainerInterface $container) {}
+
     public function GET(Request $request): Response
     {
-        $pdo    = $this->resolve(PDO::class);              // 容器中的共享 PDO
-        $logger = $this->resolve(LoggerInterface::class);  // 以及共享 logger
-        $dao    = new UserDao($pdo, $logger);              // 普通 `new` —— 不需要容器
+        $pdo    = $this->container->get(PDO::class);              // 容器中的共享 PDO
+        $logger = $this->container->get(LoggerInterface::class);  // 以及共享 logger
+        $dao    = new UserDao($pdo, $logger);                     // 普通 `new` —— 不需要容器
 
         return Response::json($dao->getAll());
     }
 }
 ```
 
-访问器叫 `resolve()` 而不是 `get()`，是刻意的：PHP 方法名不区分大小写，叫 `get()` 会与 HTTP 的 `GET()` 冲突。
+容器是**可选**的：不声明就永远拿不到它，也不付任何代价。（这里的类名是 `users` 而非 `Users`——文件名就是类名。）
 
 典型的启动装配：
 
@@ -586,10 +636,27 @@ $rest->set(RedisCache::class,            fn() => new RedisCache(new Redis()));
 2. **`foo/`** — 后面还有路径时，进入该目录，继续匹配 `bar/baz`
 3. **`___name___.php`** — 通配文件，用于最后一段：任意段都匹配，并捕获为 `name`
 4. **`___name___/`** — 通配目录，用于后面还有路径时
-5. **`__other__.php`** — 声明在本层的兜底资源，响应当前段及其后的全部路径；其尾巴通过 `$this->remaining` 传入
+5. **`__catch_remaining__.php`** — 响应当前段及其后的全部路径（两个下划线，不是三个——`___name___` 是通配的形状）
 6. **404** — 以上都不匹配，返回 404
 
+**资源构造器能收到三样东西，规则各不相同：**
+
+| 通道 | 怎么传 | 何时传 |
+|---|---|---|
+| 路径捕获 | 按名字 | 总是——路径上每个捕获到的值都要声明，漏掉的那个会在构建时报出名字 |
+| 容器 | 位置第一 | 第一个参数类型为 `ContainerInterface` 时 |
+| 剩余路径 | 按名字，`remaining` | 构造器声明了它时 |
+
+`users/___user_id___.php` 声明 `__construct(private string $user_id) {}`，读 `$this->user_id`；`/users/{user_id}/posts` 同样会拿到 `user_id`，因为到达的是**整条路径**的捕获，而不只是最后一段。捕获到的是原始段，因此参数只能声明为 `string`——校验或转换是资源自己的事。`remaining` 是保留名：若某个通配也捕获它，会被直接报错，而不是静默取舍。三样都不要的资源，连构造器都不用写。
+
 同名的文件与目录可以并存：`users.php` 是集合本身，`users/` 装它的下级。
+
+**剩余路径在匹配中断的那一层被接住。** `__catch_remaining__.php` 回应"没有任何文件或目录认领的那一段及其后的全部"——深度不定的资源就是这样写的：`docs/__catch_remaining__.php` 处理 `/docs/a/b/c`，构造器收到 `$remaining = ['a', 'b', 'c']`。
+
+由此有两条边界，放这种文件之前都值得先知道：
+
+- 目录是容器，进入它是为了继续往下走。**精确**目录即使在末段也会被进入——`/docs` 正是这样到达 `docs/` 里那个文件的。**通配**目录不会，所以 `/api/v1` 到不了 `api/___version___/` 里的捕获文件。`___version___/` 是 `/api/v1/...` 的容器，不是 `/api/v1` 的资源；那一层需要一个文件（`api/___version___.php`）。
+- 放在根目录就会接住全站没人认领的路径，`/nonexistent` 于是变成 200。放在你确实想接管的那一层。
 
 最终，定位到的资源统一通过模板方法 `handle()`（`before` → HTTP 方法 → `after`）处理请求，因此**无论是否有多余路径段，前置/后置钩子行为一致**。
 
@@ -601,7 +668,7 @@ $rest->set(RedisCache::class,            fn() => new RedisCache(new Redis()));
 
 **同级精确与通配的优先级**：精确的 `foo.php` / `foo/` 始终优先于通配。若同一深度两者都存在，精确匹配胜出——通配永远不会被命中。这是有意设计的：显式路由不应被参数捕获所遮蔽。
 
-**路由参数保留原始 URL 编码**：从 `___param___` 文件或目录捕获的值按原样传入（例如 `hello%20world` 保持 `hello%20world`）。需要解码时用 `urldecode($this->param('name'))` 即可。这是有意设计的——保留原始编码为 `%2e%2e` 这类路径穿越变体提供了额外的防护层。
+**路由参数保留原始 URL 编码**：从 `___param___` 文件或目录捕获的值按原样传入（例如 `hello%20world` 保持 `hello%20world`）。需要解码时对构造器参数用 `urldecode()` 即可。这是有意设计的——保留原始编码为 `%2e%2e` 这类路径穿越变体提供了额外的防护层。
 
 > **文件名就是类名**，所以 PHP 关键字不能做资源：`/new` 会需要 `class new {}`，解析器直接拒绝。改用复数（`/news`、`/lists`、`/classes`）或其他措辞——框架会把这类解析错误连同文件名和原因一起报出来。
 
@@ -613,8 +680,8 @@ $rest->set(RedisCache::class,            fn() => new RedisCache(new Redis()));
 
 | | `MiRest::before()` | 资源级 `before()` |
 |---|---|---|
-| 时机 | 定位器之前，每个请求都会经过 | 已定位的资源内，参数已就位、动词尚未判定 |
-| 手里有什么 | 只有 `Request` | `$request`、`$this->params` 与 `static::class` |
+| 时机 | 定位器之前，每个请求都会经过 | 已定位的资源内，构造器参数已注入、动词尚未判定 |
+| 手里有什么 | 只有 `Request` | `$request` 与 `static::class` |
 | 端点身份 | 没有——只有一个字面路径 | `static::class` 就是端点：一个端点一个键，不随参数取值变化 |
 | 什么都没匹配上的路径 | 照样经过它 | 根本到不了 |
 
@@ -623,14 +690,16 @@ $rest->set(RedisCache::class,            fn() => new RedisCache(new Redis()));
 ```php
 abstract class RestrictedResource extends AbstractResource
 {
+    public function __construct(protected ContainerInterface $container) {}
+
     protected function before(Request $request): ?Response
     {
         // static::class 就是端点——...\users\___user_id___ 响应 /users/{id}，
-        // ...\users 响应 /users；$this->params 里是捕获到的取值，
-        // 字面路径在 $request 上。
-        $policy = $this->resolve('policy');
+        // ...\users 响应 /users。字面路径（端点级规则通常以它为键）
+        // 在 $request 上。
+        $policy = $this->container->get('policy');
 
-        if (!$policy->allows(static::class, $request->method, $this->params)) {
+        if (!$policy->allows(static::class, $request->method, $request->path)) {
             return Response::json(['error' => 'Forbidden'], 403);
         }
 
@@ -639,7 +708,11 @@ abstract class RestrictedResource extends AbstractResource
 }
 ```
 
+继承这个基类、同时又要路径参数的资源得声明自己的构造器，并且必须把容器转发上去（`parent::__construct($container)`），否则 `before()` 会遇到未初始化的属性。
+
 返回 `Response` 即短路，且该钩子在动词判定之前运行——因此拒绝不会告诉未授权者这个端点支持哪些方法。
+
+基类读不到子类构造器的参数：那些值只在声明它们的资源内可见。所以端点级策略放在这里（基类、以端点为键）；需要用到参数取值的规则属于行级，应留在资源自己内部。
 
 一点提醒：基类是 fail-open 的。忘记继承的资源会静默失守，这正是要把粗粒度、看不见端点的默认策略留在 `MiRest::before()`、而把按端点的判定当作叠加层而非唯一防线的原因。
 
@@ -700,11 +773,7 @@ $response->send(): void
 | `HEAD()` | 与 `GET()` 相同但不返回响应体 |
 | `before(Request): ?Response` | 前置钩子，返回响应则短路 |
 | `after(Request, Response): Response` | 后置钩子，修改并返回响应 |
-| `param(string $name, mixed $default = null): mixed` | 获取命名路由参数 |
-| `resolve(string $id): mixed` | 解析已注册的条目（PDO、Logger、Manager 等） |
 | `assertInt(mixed, string): int` | 验证整数，失败抛 404 |
-| `$this->params` | 所有命名参数数组 |
-| `$this->remaining` | 剩余路径段（仅 catch-all 资源有值） |
 
 ## License
 

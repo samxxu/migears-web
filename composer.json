@@ -3,7 +3,7 @@
     "description": "Minimalist REST framework with file-as-routing",
     "type": "library",
     "license": "MIT",
-    "version": "2.2.0",
+    "version": "2.3.0",
     "keywords": [
         "php",
         "rest",

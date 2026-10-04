@@ -126,22 +126,49 @@ class ResourceLocatorTest extends TestCase
         $this->assertNull($result);
     }
 
-    public function testCatchAll(): void
+    public function testCatchRemaining(): void
     {
         $locator = new ResourceLocator($this->baseDir);
-        $result = $locator->locate('/catchall/anything/here');
+        $result = $locator->locate('/docs/anything/here');
         $this->assertNotNull($result);
-        $this->assertSame('__other__', $result[0]);
+        $this->assertSame('__catch_remaining__', $result[0]);
         $this->assertSame(['anything', 'here'], $result[3]);
     }
 
-    public function testCatchAllRoot(): void
+    public function testCatchRemainingAtItsOwnDepth(): void
     {
         $locator = new ResourceLocator($this->baseDir);
-        $result = $locator->locate('/catchall');
+        $result = $locator->locate('/docs');
         $this->assertNotNull($result);
-        $this->assertSame('__other__', $result[0]);
+        $this->assertSame('__catch_remaining__', $result[0]);
         $this->assertSame([], $result[3]);
+    }
+
+    public function testCatchRemainingUnderAWildcardIsNotReachedAtTheWildcardsDepth(): void
+    {
+        // A file answers a segment that ends the path, a directory carries it further.
+        // An exact directory is still entered when it ends the path — that is how
+        // /docs reaches the file inside docs/ — but a wildcard directory is not, so
+        // /api/v1 never reaches the catch-remaining file inside ___version___/.
+        $dir = sys_get_temp_dir() . '/migears-wildcatch-' . uniqid();
+        mkdir($dir . '/api/___version___', 0777, true);
+        file_put_contents($dir . '/api/___version___/__catch_remaining__.php', "<?php\n");
+
+        try {
+            $locator = new ResourceLocator($dir);
+
+            $tail = $locator->locate('/api/v1/foo');
+            $this->assertNotNull($tail);
+            $this->assertSame(['foo'], $tail[3]);
+            $this->assertSame(['version' => 'v1'], $tail[2]);
+
+            $this->assertNull($locator->locate('/api/v1'));
+        } finally {
+            unlink($dir . '/api/___version___/__catch_remaining__.php');
+            rmdir($dir . '/api/___version___');
+            rmdir($dir . '/api');
+            rmdir($dir);
+        }
     }
 
     public function testTrailingSlash(): void

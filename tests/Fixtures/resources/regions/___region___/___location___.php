@@ -9,11 +9,13 @@ use MiGears\Web\Response;
 
 class ___location___ extends AbstractResource
 {
+    public function __construct(private string $region, private string $location) {}
+
     public function GET(Request $request): Response
     {
         return Response::json([
-            'region' => $this->param('region'),
-            'location' => $this->param('location'),
+            'region' => $this->region,
+            'location' => $this->location,
         ]);
     }
 }

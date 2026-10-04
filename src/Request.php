@@ -7,8 +7,8 @@ namespace MiGears\Web;
  * Lightweight HTTP request object.
  * Encapsulates request data to avoid direct use of superglobals and facilitates unit testing.
  *
- * Properties are publicly mutable for extension — subclasses and middleware
- * can decorate the request (e.g. add parsed attributes, normalized headers).
+ * Properties are public and mutable so callers can decorate the request in place —
+ * adding parsed attributes, normalizing headers — rather than wrapping it.
  */
 final class Request
 {
@@ -62,8 +62,10 @@ final class Request
     /**
      * Resolve the request body.
      *
-     * Prefers the (form-)parsed $_POST. When $_POST is empty but a raw body is
-     * present (e.g. application/json POST/PUT/PATCH/DELETE), parses it as JSON.
+     * Prefers the (form-)parsed $_POST, which PHP fills for a form-encoded POST.
+     * When that is empty and a raw body is present, the raw body is read as JSON —
+     * the only raw form this understands, so a form-encoded PUT or PATCH arrives
+     * empty rather than half-parsed.
      *
      * @param array<string, mixed> $post
      * @return array<string, mixed>
