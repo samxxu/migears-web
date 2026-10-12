@@ -273,7 +273,7 @@ Finally, the located resource serves the request through the template method `ha
 
 Once located, the HTTP verb decides what runs: the handler the resource declares, or `405 Method Not Allowed` when it declares none — the 405 response always carries an `Allow` header listing the supported methods (RFC 9110). A request whose verb is not an HTTP method gets the same 405 and never calls a handler method, so the resource's own helpers can never be invoked as handlers; note though that the resource is still instantiated and its `before()` runs before the 405 is decided. The default `OPTIONS()` reports what the resource supports through an `Allow` header.
 
-Matching lowercases the URL segment, so `/Users` and `/users` reach the same file — nothing else is rewritten, so `-` and `_` are *not* interchangeable and the URL has to match the file name (`/blog_posts` only reaches `blog_posts.php`). `.` / `..` segments are dropped, and a segment carrying a backslash or a NUL byte is refused outright, so the locator can never escape the resource root; `baseDir` must be an existing directory or an `InvalidArgumentException` is thrown.
+Matching lowercases the URL segment and maps `-` → `_` for exact file/directory lookups, so `/Blog-Posts`, `/blog-posts` and `/blog_posts` all reach `blog_posts.php`. This lets **kebab-case** be the recommended URL style on top of PHP's snake_case file names — the locator's `nameFor()` method, overrideable via subclass, defines the mapping. Wildcard captures and the catch-remaining leftover path are never transformed, because they are user data: `/users/john-X-99` captures `john-X-99` (original), not `john_x_99`. `.` / `..` segments are dropped, and a segment carrying a backslash or a NUL byte is refused outright, so the locator can never escape the resource root; `baseDir` must be an existing directory or an `InvalidArgumentException` is thrown.
 
 **Wildcard vs exact on the same level**: an exact `foo.php` / `foo/` always takes priority over a wildcard. If both exist at the same depth, the exact match wins — the wildcard is never reached. This is intentional: explicit routes should not be shadowed by parameter captures.
 
@@ -664,7 +664,7 @@ $rest->set(RedisCache::class,            fn() => new RedisCache(new Redis()));
 
 定位到资源之后，由 HTTP 动词决定执行什么：资源声明了就执行对应处理器，没声明则返回 `405 Method Not Allowed`——405 响应始终携带列出支持方法的 `Allow` 头（RFC 9110）。不是 HTTP 动词的请求同样得到 405，且不会调用任何处理器方法，因此资源自己的辅助方法不可能被当成处理器调用；但要注意资源本身仍会被实例化、其 `before()` 仍会先运行，之后才判定为 405。默认的 `OPTIONS()` 会通过 `Allow` 头报告该资源支持哪些方法。
 
-匹配时只把 URL 段转小写，因此 `/Users` 与 `/users` 会命中同一个文件——除此之外不做任何改写，所以 `-` 与 `_` **不**等价，URL 必须与文件名一致（`/blog_posts` 只能命中 `blog_posts.php`）。路径中的 `.` / `..` 段会被丢弃，含反斜杠或 NUL 字节的段则直接拒绝路由，定位器永远不会逃出资源根目录；`baseDir` 必须是已存在的目录，否则抛出 `InvalidArgumentException`。
+匹配时会把 URL 段转小写、并在精确文件/目录查找时把 `-` 映射成 `_`，因此 `/Blog-Posts`、`/blog-posts` 和 `/blog_posts` 都会命中 `blog_posts.php`。这样 **kebab-case** 成为推荐的 URL 风格（PHP 标识符不能含 `-`，文件名自然是 snake_case）。这个映射由定位器的 `nameFor()` 方法定义，可通过子类覆写。通配捕获的值与 `__catch_remaining__` 的剩余路径永远不做转换，因为它们是用户数据：`/users/john-X-99` 捕获 `john-X-99`（原始值），而不是 `john_x_99`。路径中的 `.` / `..` 段会被丢弃，含反斜杠或 NUL 字节的段则直接拒绝路由，定位器永远不会逃出资源根目录；`baseDir` 必须是已存在的目录，否则抛出 `InvalidArgumentException`。
 
 **同级精确与通配的优先级**：精确的 `foo.php` / `foo/` 始终优先于通配。若同一深度两者都存在，精确匹配胜出——通配永远不会被命中。这是有意设计的：显式路由不应被参数捕获所遮蔽。
 
