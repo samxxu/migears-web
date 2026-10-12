@@ -243,4 +243,59 @@ class ResourceLocatorTest extends TestCase
         $locator = new ResourceLocator($this->baseDir);
         $this->assertNull($locator->locate("/users/abc\0def"));
     }
+
+    // --- kebab / snake tolerance (default nameFor() behaviour) ---
+
+    public function testKebabUrlResolvesToSnakeFile(): void
+    {
+        // Recommended kebab URL → snake file name (PHP class names cannot contain `-`)
+        $locator = new ResourceLocator($this->baseDir);
+        $result = $locator->locate('/blog-posts');
+        $this->assertNotNull($result);
+        $this->assertSame('blog_posts', $result[0]);
+        $this->assertStringEndsWith('blog_posts.php', $result[1]);
+    }
+
+    public function testSnakeUrlAlsoResolvesToSnakeFile(): void
+    {
+        // Legacy snake URLs still work — segments without `-` come through unchanged after lowercasing
+        $locator = new ResourceLocator($this->baseDir);
+        $result = $locator->locate('/blog_posts');
+        $this->assertNotNull($result);
+        $this->assertSame('blog_posts', $result[0]);
+    }
+
+    public function testKebabWithUppercaseAlsoResolves(): void
+    {
+        $locator = new ResourceLocator($this->baseDir);
+        $result = $locator->locate('/Blog-Posts');
+        $this->assertNotNull($result);
+        $this->assertSame('blog_posts', $result[0]);
+    }
+
+    public function testWildcardCaptureKeepsUnderscoreSegmentUntouched(): void
+    {
+        // A user-data segment (`john_X_99`) falls through to the wildcard, which
+        // captures the raw URL value — nameFor() only affects exact file/directory
+        // lookups, not what the wildcard hands over.
+        $dir = sys_get_temp_dir() . '/migears-wild-kebab-' . uniqid();
+        mkdir($dir . '/users', 0777, true);
+        file_put_contents($dir . '/users/___user_id___.php', "<?php\n");
+
+        try {
+            $locator = new ResourceLocator($dir);
+
+            $snake = $locator->locate('/users/john_X_99');
+            $this->assertNotNull($snake);
+            $this->assertSame(['user_id' => 'john_X_99'], $snake[2]);
+
+            $kebab = $locator->locate('/users/john-X-99');
+            $this->assertNotNull($kebab);
+            $this->assertSame(['user_id' => 'john-X-99'], $kebab[2]);
+        } finally {
+            unlink($dir . '/users/___user_id___.php');
+            rmdir($dir . '/users');
+            rmdir($dir);
+        }
+    }
 }

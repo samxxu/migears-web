@@ -14,7 +14,8 @@ namespace MiGears\Web;
  * reaches the catch-remaining file inside `docs/`; a wildcard directory is not,
  * so `/api/v1` never reaches the one inside `api/___version___/`.
  *
- * File naming conventions (lowercase, used verbatim — the path is the name):
+ * File naming conventions (kebab-case is the recommended URL style; on disk the
+ * equivalent snake_case names the file, because PHP identifiers cannot contain `-`):
  *   index.php        → the root resource, `/`
  *   <segment>.php    → exact match for /<segment>
  *   <segment>/       → container for a deeper path
@@ -32,8 +33,11 @@ namespace MiGears\Web;
  * used — `class new {}` is a parse error. MiRest reports that when it loads the
  * file.
  *
- * Matching lowercases the URL segment, so `/Users` and `/users` reach the same
- * file; the wildcard value keeps the segment exactly as it arrived, encoded.
+ * `nameFor()` normalises a URL segment into the file-system segment used for
+ * exact file/directory lookups. The default is kebab → snake conversion plus
+ * lowercasing, so `/blog-posts` and `/blog_posts` both resolve to `blog_posts.php`.
+ * Wildcard values and the catch-remaining leftover path are never transformed —
+ * they are user data, not resource identifiers, so they arrive exactly as in the URL.
  */
 class ResourceLocator
 {
@@ -81,7 +85,7 @@ class ResourceLocator
         $lastIndex = count($segments) - 1;
 
         foreach ($segments as $i => $segment) {
-            $name = strtolower($segment);
+            $name = $this->nameFor($segment);
             $isLast = $i === $lastIndex;
 
             // 1. The resource for the final segment: <segment>.php
@@ -197,5 +201,24 @@ class ResourceLocator
     protected function fileExists(string $path): bool
     {
         return file_exists($path);
+    }
+
+    /**
+     * Turn a URL segment into the file-system segment used for exact lookups.
+     *
+     * The default lowercases the segment and maps `-` → `_`, which is what lets
+     * the recommended kebab-case URL resolve to a snake_case file name (PHP
+     * identifiers cannot contain `-`). The mapping is also tolerant: `/blog_posts`
+     * works too, because segments without `-` come through unchanged after
+     * lowercasing.
+     *
+     * Only file/directory lookup goes through here. Wildcard captures and the
+     * leftover path are user data and stay exactly as the URL sent them.
+     *
+     * Override to change the style — pass-through, camelCase, whatever.
+     */
+    protected function nameFor(string $segment): string
+    {
+        return str_replace('-', '_', strtolower($segment));
     }
 }

@@ -33,7 +33,7 @@ class MiRest implements ContainerInterface
     /** The constructor parameter a `__catch_remaining__.php` receives the leftover path as. */
     private const REMAINING_ARGUMENT = 'remaining';
 
-    private ResourceLocator $locator;
+    private ?ResourceLocator $locator = null;
 
     /** @var array<string, callable(): mixed> */
     private array $factories = [];
@@ -60,7 +60,18 @@ class MiRest implements ContainerInterface
         private readonly string $baseDir,
         private readonly string $namespace = '',
     ) {
-        $this->locator = new ResourceLocator($baseDir);
+        if ($baseDir === '' || !is_dir($baseDir)) {
+            throw new \InvalidArgumentException("Resource base directory must be an existing directory: $baseDir");
+        }
+    }
+
+    /**
+     * Create the resource locator. Override to supply a custom subclass
+     * (e.g. one that changes how URL segments map to file names via nameFor()).
+     */
+    protected function createLocator(): ResourceLocator
+    {
+        return new ResourceLocator($this->baseDir);
     }
 
     /**
@@ -199,7 +210,7 @@ class MiRest implements ContainerInterface
         }
 
         // Locate resource
-        $result = $this->locator->locate($request->path);
+        $result = ($this->locator ??= $this->createLocator())->locate($request->path);
         if ($result === null) {
             return $this->handleNotFound();
         }
